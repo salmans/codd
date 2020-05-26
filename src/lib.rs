@@ -5,7 +5,7 @@ mod expression;
 mod tools;
 
 pub use database::Database;
-pub use expression::Join;
+pub use expression::{Join, Project, Relation, View};
 
 pub trait Tuple: Ord + Clone + Debug {}
 impl<T: Ord + Clone + Debug> Tuple for T {}
