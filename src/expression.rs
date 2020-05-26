@@ -1,6 +1,6 @@
 use crate::{
     database::{Database, Tuples, ViewRef},
-    tools::join_helper,
+    tools::{join_helper, project_helper},
     Tuple,
 };
 use anyhow::Result;
@@ -67,6 +67,70 @@ impl<T: Tuple + 'static> Expression<T> for Relation<T> {
 
     fn duplicate(&self) -> Box<dyn Expression<T>> {
         Box::new(Self::new(&self.name))
+    }
+}
+
+pub struct Project<S, T>
+where
+    S: Tuple,
+    T: Tuple,
+{
+    expression: Box<dyn Expression<S>>,
+    project: Rc<RefCell<dyn FnMut(&S) -> T>>,
+}
+
+impl<S, T> Project<S, T>
+where
+    S: Tuple,
+    T: Tuple,
+{
+    pub fn new(expression: &impl Expression<S>, project: impl FnMut(&S) -> T + 'static) -> Self {
+        Self {
+            expression: expression.duplicate(),
+            project: Rc::new(RefCell::new(project)),
+        }
+    }
+}
+
+impl<S, T> Expression<T> for Project<S, T>
+where
+    S: Tuple + 'static,
+    T: Tuple + 'static,
+{
+    fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
+        db.update_views()?;
+
+        let mut result = self.recent_tuples(&db)?;
+        for batch in self.stable_tuples(&db)? {
+            result = result.merge(batch);
+        }
+
+        Ok(result)
+    }
+    fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
+        let mut result = Vec::new();
+        let recent = self.expression.recent_tuples(&db)?;
+        let project = &mut (*self.project.borrow_mut());
+        project_helper(&recent, |t| result.push(project(t)));
+
+        Ok(result.into())
+    }
+    fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
+        let mut result = Vec::<Tuples<T>>::new();
+        let stable = self.expression.stable_tuples(&db)?;
+        let project = &mut (*self.project.borrow_mut());
+        for batch in stable.iter() {
+            let mut tuples = Vec::new();
+            project_helper(&batch, |t| tuples.push(project(t)));
+            result.push(tuples.into());
+        }
+        Ok(result)
+    }
+    fn duplicate(&self) -> Box<dyn Expression<T>> {
+        Box::new(Self {
+            expression: self.expression.duplicate(),
+            project: self.project.clone(),
+        })
     }
 }
 
@@ -274,6 +338,18 @@ mod tests {
     }
 
     #[test]
+    fn test_duplicate_project() {
+        let mut database = Database::new();
+        let r = database.new_relation::<i32>("r");
+        r.insert(vec![1, 2, 3].into(), &database).unwrap();
+        let p = Project::new(&r, |&t| t * 10).duplicate();
+        assert_eq!(
+            Tuples::<i32>::from(vec![10, 20, 30]),
+            p.evaluate(&database).unwrap()
+        );
+    }
+
+    #[test]
     fn test_duplicate_join() {
         let mut database = Database::new();
         let r = database.new_relation::<(i32, i32)>("r");
@@ -314,6 +390,45 @@ mod tests {
             let r = dummy.new_relation::<i32>("r");
 
             assert!(r.evaluate(&database).is_err());
+        }
+    }
+
+    #[test]
+    fn test_evaluate_project() {
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let project = Project::new(&r, |t| t * 10);
+
+            let result = project.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let project = Project::new(&r, |t| t * 10);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = project.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![10, 20, 30, 40]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let p1 = Project::new(&r, |t| t * 10);
+            let p2 = Project::new(&p1, |t| t + 1);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = p2.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![11, 21, 31, 41]), result);
+        }
+        {
+            let database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.new_relation::<i32>("r");
+            let project = Project::new(&r, |t| t + 1);
+            assert!(project.evaluate(&database).is_err());
         }
     }
 
