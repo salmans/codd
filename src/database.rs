@@ -276,7 +276,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expression::{Join, Project};
+    use crate::expression::{Join, Project, Select};
 
     #[test]
     fn test_tuples_from_list() {
@@ -549,6 +549,14 @@ mod tests {
 
         {
             let mut database = Database::new();
+            database.new_view(&Select::new(&Relation::<i32>::new("a"), |&t| t != 0));
+
+            assert!(database.views.get(&ViewRef(0)).is_some());
+            assert!(database.views.get(&ViewRef(1000)).is_none());
+        }
+
+        {
+            let mut database = Database::new();
             database.new_view(&Project::new(&Relation::<i32>::new("a"), |t| t + 1));
 
             assert!(database.views.get(&ViewRef(0)).is_some());
@@ -668,6 +676,49 @@ mod tests {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
+                },
+                database.view(&v).unwrap()
+            );
+        }
+
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let v = database.new_view(&Select::new(&r, |t| t % 2 == 1));
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.relation_changed();
+            database
+                .views
+                .get(&v.reference)
+                .unwrap()
+                .update(&database)
+                .unwrap();
+
+            assert_eq!(
+                &Table::<i32> {
+                    to_add: Rc::new(RefCell::new(vec![vec![1, 3].into()])),
+                    recent: Rc::new(RefCell::new(vec![].into())),
+                    stable: Rc::new(RefCell::new(vec![])),
+                },
+                database.view(&v).unwrap()
+            );
+
+            assert!(database.view_changed());
+            assert_eq!(
+                &Table::<i32> {
+                    to_add: Rc::new(RefCell::new(vec![])),
+                    recent: Rc::new(RefCell::new(vec![1, 3].into())),
+                    stable: Rc::new(RefCell::new(vec![])),
+                },
+                database.view(&v).unwrap()
+            );
+
+            assert!(!database.view_changed());
+            assert_eq!(
+                &Table::<i32> {
+                    to_add: Rc::new(RefCell::new(vec![])),
+                    recent: Rc::new(RefCell::new(vec![].into())),
+                    stable: Rc::new(RefCell::new(vec![vec![1, 3].into()])),
                 },
                 database.view(&v).unwrap()
             );
