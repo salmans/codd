@@ -70,13 +70,82 @@ impl<T: Tuple + 'static> Expression<T> for Relation<T> {
     }
 }
 
+pub struct Select<T>
+where
+    T: Tuple,
+{
+    expression: Box<dyn Expression<T>>,
+    predicate: Rc<RefCell<dyn FnMut(&T) -> bool>>,
+}
+
+impl<T> Select<T>
+where
+    T: Tuple,
+{
+    pub fn new(
+        expression: &impl Expression<T>,
+        predicate: impl FnMut(&T) -> bool + 'static,
+    ) -> Self {
+        Self {
+            expression: expression.duplicate(),
+            predicate: Rc::new(RefCell::new(predicate)),
+        }
+    }
+}
+
+impl<T> Expression<T> for Select<T>
+where
+    T: Tuple + 'static,
+{
+    fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
+        db.update_views()?;
+        let mut result = self.recent_tuples(&db)?;
+        for batch in self.stable_tuples(&db)? {
+            result = result.merge(batch);
+        }
+        Ok(result)
+    }
+    fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
+        let mut result = Vec::new();
+        let recent = self.expression.recent_tuples(&db)?;
+        let predicate = &mut (*self.predicate.borrow_mut());
+        for tuple in &recent[..] {
+            if predicate(tuple) {
+                result.push(tuple.clone());
+            }
+        }
+        Ok(result.into())
+    }
+    fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
+        let mut result = Vec::<Tuples<T>>::new();
+        let stable = self.expression.stable_tuples(&db)?;
+        let predicate = &mut (*self.predicate.borrow_mut());
+        for batch in stable.iter() {
+            let mut tuples = Vec::new();
+            for tuple in &batch[..] {
+                if predicate(tuple) {
+                    tuples.push(tuple.clone());
+                }
+            }
+            result.push(tuples.into());
+        }
+        Ok(result)
+    }
+    fn duplicate(&self) -> Box<dyn Expression<T>> {
+        Box::new(Self {
+            expression: self.expression.duplicate(),
+            predicate: self.predicate.clone(),
+        })
+    }
+}
+
 pub struct Project<S, T>
 where
     S: Tuple,
     T: Tuple,
 {
     expression: Box<dyn Expression<S>>,
-    project: Rc<RefCell<dyn FnMut(&S) -> T>>,
+    mapper: Rc<RefCell<dyn FnMut(&S) -> T>>,
 }
 
 impl<S, T> Project<S, T>
@@ -87,7 +156,7 @@ where
     pub fn new(expression: &impl Expression<S>, project: impl FnMut(&S) -> T + 'static) -> Self {
         Self {
             expression: expression.duplicate(),
-            project: Rc::new(RefCell::new(project)),
+            mapper: Rc::new(RefCell::new(project)),
         }
     }
 }
@@ -99,29 +168,26 @@ where
 {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
         db.update_views()?;
-
         let mut result = self.recent_tuples(&db)?;
         for batch in self.stable_tuples(&db)? {
             result = result.merge(batch);
         }
-
         Ok(result)
     }
     fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
         let mut result = Vec::new();
         let recent = self.expression.recent_tuples(&db)?;
-        let project = &mut (*self.project.borrow_mut());
-        project_helper(&recent, |t| result.push(project(t)));
-
+        let mapper = &mut (*self.mapper.borrow_mut());
+        project_helper(&recent, |t| result.push(mapper(t)));
         Ok(result.into())
     }
     fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
         let mut result = Vec::<Tuples<T>>::new();
         let stable = self.expression.stable_tuples(&db)?;
-        let project = &mut (*self.project.borrow_mut());
+        let mapper = &mut (*self.mapper.borrow_mut());
         for batch in stable.iter() {
             let mut tuples = Vec::new();
-            project_helper(&batch, |t| tuples.push(project(t)));
+            project_helper(&batch, |t| tuples.push(mapper(t)));
             result.push(tuples.into());
         }
         Ok(result)
@@ -129,7 +195,7 @@ where
     fn duplicate(&self) -> Box<dyn Expression<T>> {
         Box::new(Self {
             expression: self.expression.duplicate(),
-            project: self.project.clone(),
+            mapper: self.mapper.clone(),
         })
     }
 }
@@ -143,7 +209,7 @@ where
 {
     left: Box<dyn Expression<(K, L)>>,
     right: Box<dyn Expression<(K, R)>>,
-    project: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
+    mapper: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
 }
 
 impl<K, L, R, T> Join<K, L, R, T>
@@ -161,7 +227,7 @@ where
         Self {
             left: left.duplicate(),
             right: right.duplicate(),
-            project: Rc::new(RefCell::new(project)),
+            mapper: Rc::new(RefCell::new(project)),
         }
     }
 }
@@ -190,22 +256,22 @@ where
         let right_recent = self.right.recent_tuples(&db)?;
         let right_stable = self.right.stable_tuples(&db)?;
 
-        let project = &mut (*self.project.borrow_mut());
+        let mapper = &mut (*self.mapper.borrow_mut());
 
         for left_batch in left_stable.iter() {
             join_helper(&left_batch, &right_recent, |k, v1, v2| {
-                result.push(project(k, v1, v2))
+                result.push(mapper(k, v1, v2))
             });
         }
 
         for right_batch in right_stable.iter() {
             join_helper(&left_recent, &right_batch, |k, v1, v2| {
-                result.push(project(k, v1, v2))
+                result.push(mapper(k, v1, v2))
             });
         }
 
         join_helper(&left_recent, &right_recent, |k, v1, v2| {
-            result.push(project(k, v1, v2))
+            result.push(mapper(k, v1, v2))
         });
 
         Ok(result.into())
@@ -216,12 +282,12 @@ where
         let left = self.left.stable_tuples(&db)?;
         let right = self.right.stable_tuples(&db)?;
 
-        let project = &mut (*self.project.borrow_mut());
+        let mapper = &mut (*self.mapper.borrow_mut());
         for left_batch in left.iter() {
             let mut tuples = Vec::new();
             for right_batch in right.iter() {
                 join_helper(&left_batch, &right_batch, |k, v1, v2| {
-                    tuples.push(project(k, v1, v2))
+                    tuples.push(mapper(k, v1, v2))
                 });
             }
             result.push(tuples.into());
@@ -232,7 +298,7 @@ where
         Box::new(Self {
             left: self.left.duplicate(),
             right: self.right.duplicate(),
-            project: self.project.clone(),
+            mapper: self.mapper.clone(),
         })
     }
 }
@@ -338,6 +404,18 @@ mod tests {
     }
 
     #[test]
+    fn test_duplicate_select() {
+        let mut database = Database::new();
+        let r = database.new_relation::<i32>("r");
+        r.insert(vec![1, 2, 3].into(), &database).unwrap();
+        let p = Select::new(&r, |&t| t % 2 == 1).duplicate();
+        assert_eq!(
+            Tuples::<i32>::from(vec![1, 3]),
+            p.evaluate(&database).unwrap()
+        );
+    }
+
+    #[test]
     fn test_duplicate_project() {
         let mut database = Database::new();
         let r = database.new_relation::<i32>("r");
@@ -390,6 +468,45 @@ mod tests {
             let r = dummy.new_relation::<i32>("r");
 
             assert!(r.evaluate(&database).is_err());
+        }
+    }
+
+    #[test]
+    fn test_evaluate_select() {
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let project = Select::new(&r, |t| t % 2 == 1);
+
+            let result = project.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let project = Select::new(&r, |t| t % 2 == 0);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = project.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.new_relation::<i32>("r");
+            let p1 = Select::new(&r, |t| t % 2 == 0);
+            let p2 = Select::new(&p1, |&t| t > 3);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = p2.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![4]), result);
+        }
+        {
+            let database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.new_relation::<i32>("r");
+            let project = Select::new(&r, |&t| t > 1);
+            assert!(project.evaluate(&database).is_err());
         }
     }
 
