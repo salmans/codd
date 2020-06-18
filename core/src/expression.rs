@@ -6,6 +6,21 @@ use crate::{
 use anyhow::Result;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
+impl<T: Tuple, E: Expression<T>> Expression<T> for &E {
+    fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
+        (*self).evaluate(db)
+    }
+    fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
+        (*self).recent_tuples(db)
+    }
+    fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
+        (*self).stable_tuples(db)
+    }
+    fn duplicate(&self) -> Box<dyn Expression<T>> {
+        (*self).duplicate()
+    }
+}
+
 pub trait Expression<T: Tuple> {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>>;
 
@@ -16,6 +31,7 @@ pub trait Expression<T: Tuple> {
     fn duplicate(&self) -> Box<dyn Expression<T>>;
 }
 
+#[derive(Clone)]
 pub struct Relation<T: Tuple> {
     pub(crate) name: String,
     _phantom: PhantomData<T>,
@@ -303,6 +319,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct View<T: Tuple> {
     pub(crate) reference: ViewRef,
     _phantom: PhantomData<T>,
@@ -484,10 +501,10 @@ mod tests {
         {
             let mut database = Database::new();
             let r = database.new_relation::<i32>("r");
-            let project = Select::new(&r, |t| t % 2 == 0);
+            let select = Select::new(&r, |t| t % 2 == 0);
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
 
-            let result = project.evaluate(&database).unwrap();
+            let result = select.evaluate(&database).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
         }
         {
@@ -505,8 +522,8 @@ mod tests {
             let database = Database::new();
             let mut dummy = Database::new();
             let r = dummy.new_relation::<i32>("r");
-            let project = Select::new(&r, |&t| t > 1);
-            assert!(project.evaluate(&database).is_err());
+            let select = Select::new(&r, |&t| t > 1);
+            assert!(select.evaluate(&database).is_err());
         }
     }
 
