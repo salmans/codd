@@ -1,11 +1,10 @@
-use std::fmt::Debug;
-
 mod database;
 mod expression;
+mod macros;
 mod tools;
 
-pub use database::Database;
-pub use expression::{Join, Project, Relation, Select, View};
+pub use database::{Database, Tuples};
+pub use expression::{Expression, Join, Project, Relation, Select, View};
 
-pub trait Tuple: Ord + Clone + Debug {}
-impl<T: Ord + Clone + Debug> Tuple for T {}
+pub trait Tuple: Ord + Clone {}
+impl<T: Ord + Clone> Tuple for T {}
