@@ -10,10 +10,10 @@ struct Person {
 }
 
 fn main() -> Result<()> {
-    let mut got = Database::new();
-    let person = got.new_relation::<Person>("Person");
-    person.insert(
-        vec![
+    let mut family = Database::new();
+    let person = relalg! { create relation "Person" [Person] in family };
+    relalg! (
+        insert into (person) values [
             Person {
                 id: 1,
                 name: "Arya Stark".to_string(),
@@ -39,10 +39,10 @@ fn main() -> Result<()> {
                 mother_id: None,
             },
         ]
-        .into(),
-        &got,
+            in family
     )?;
 
+    // building the query expression in multiple steps for better clarity:
     let ariyas_father = relalg! {
         select [|p| (p.father_id.unwrap(), ())] from (person)
         where
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         )
     };
 
-    let names = fathers_name.evaluate(&got);
+    let names = fathers_name.evaluate(&family);
 
     for name in names.iter() {
         println!("{:?}", name);
