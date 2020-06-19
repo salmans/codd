@@ -72,7 +72,7 @@ macro_rules! relexp {
     (@join ($($left:tt)*) ($($right:tt)*) @mapper -> [$mapper:expr]) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-       $crate::Join::new(&left, &right, $mapper)
+        $crate::Join::new(&left, &right, $mapper)
     }};
 }
 
@@ -223,6 +223,12 @@ mod tests {
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let result = exp.evaluate(&database).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3, 4]), result);
+
+            // updating the view
+            relalg! (insert into (r) values [100, 200, 300] in database).unwrap();
+            let exp = relexp!(select [|&x| x + 1] from (v) where [|&x| x >= 100]);
+            let result = exp.evaluate(&database).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![101, 201, 301]), result);
         }
     }
 }
