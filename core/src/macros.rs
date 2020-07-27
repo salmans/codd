@@ -7,7 +7,7 @@ macro_rules! relalg {
         $crate::relexp!(@select ($($rel_exp)*) $(@pred -> [$pred])?)
     };
     (create relation $name:literal [$schema:ty] in $db:ident) => {
-        $db.new_relation::<$schema>($name);
+        $db.add_relation::<$schema>($name);
     };
     (create view as
      (select [$proj:expr] from ($($rel_exp:tt)*) $(where [$pred:expr])?)
@@ -16,7 +16,7 @@ macro_rules! relalg {
             let inner_exp = $crate::relexp!(@select ($($rel_exp)*)
                                             @proj -> [$proj]
                                             $(@pred -> [$pred])?);
-            $db.new_view(&inner_exp)
+            $db.store_view(&inner_exp)
         }
     };
     (create view as
@@ -24,7 +24,7 @@ macro_rules! relalg {
      in $db:ident) => {
         {
             let inner_exp = $crate::relexp!(@select ($($rel_exp)*) $(@pred -> [$pred])?);
-            $db.new_view(&inner_exp)
+            $db.store_view(&inner_exp)
         }
     };
     (insert into ($relation:ident) values [$($value:expr),*] in $db:ident) => {
@@ -86,7 +86,7 @@ mod tests {
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r" [i32] in database};
-            assert!(database.relation(&r).is_ok());
+            assert!(database.relation_instance(&r).is_ok());
         }
         {
             let mut database = Database::new();
@@ -127,13 +127,13 @@ mod tests {
             let mut database = Database::new();
             let r = relalg! { create relation "r" [i32] in database};
             let v = relalg! { create view as (select * from (r)) in database};
-            assert!(database.view(&v).is_ok());
+            assert!(database.view_instance(&v).is_ok());
         }
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r" [i32] in database};
             let v = relalg! { create view as (select [|&x| x > 0] from (r)) in database};
-            assert!(database.view(&v).is_ok());
+            assert!(database.view_instance(&v).is_ok());
         }
     }
 
