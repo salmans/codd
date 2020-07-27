@@ -37,22 +37,22 @@ impl<T: Tuple> Deref for Tuples<T> {
     }
 }
 
-pub trait TableTrait {
-    fn table(&self) -> &dyn Any;
+trait InstanceExt {
+    fn as_any(&self) -> &dyn Any;
 
     fn changed(&self) -> bool;
 
-    fn deep_clone(&self) -> Box<dyn TableTrait>;
+    fn duplicate(&self) -> Box<dyn InstanceExt>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Table<T: Tuple> {
+pub(crate) struct Instance<T: Tuple> {
     pub(crate) stable: Rc<RefCell<Vec<Tuples<T>>>>,
     pub(crate) recent: Rc<RefCell<Tuples<T>>>,
     pub(crate) to_add: Rc<RefCell<Vec<Tuples<T>>>>,
 }
 
-impl<T: Tuple> Table<T> {
+impl<T: Tuple> Instance<T> {
     pub(crate) fn insert(&self, tuples: Tuples<T>) {
         if !tuples.is_empty() {
             self.to_add.borrow_mut().push(tuples);
@@ -60,8 +60,8 @@ impl<T: Tuple> Table<T> {
     }
 }
 
-impl<T: Tuple + 'static> TableTrait for Table<T> {
-    fn table(&self) -> &dyn Any {
+impl<T: Tuple + 'static> InstanceExt for Instance<T> {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
@@ -100,7 +100,7 @@ impl<T: Tuple + 'static> TableTrait for Table<T> {
         !self.recent.borrow().is_empty()
     }
 
-    fn deep_clone(&self) -> Box<dyn TableTrait> {
+    fn duplicate(&self) -> Box<dyn InstanceExt> {
         let mut stable: Vec<Tuples<T>> = Vec::new();
         for batch in self.stable.borrow().iter() {
             stable.push(batch.clone());
@@ -121,47 +121,47 @@ impl<T: Tuple + 'static> TableTrait for Table<T> {
 #[derive(PartialEq, Eq, Clone, Hash)]
 pub struct ViewRef(i32);
 
-trait ViewEntryTrait {
-    fn view(&self) -> &dyn Any;
+trait MaterializedViewExt {
+    fn as_any(&self) -> &dyn Any;
 
-    fn table(&self) -> &dyn TableTrait;
+    fn instance(&self) -> &dyn InstanceExt;
 
-    fn update(&self, db: &Database) -> Result<()>;
+    fn recalculate(&self, db: &Database) -> Result<()>;
 
-    fn deep_clone(&self) -> Box<dyn ViewEntryTrait>;
+    fn duplicate(&self) -> Box<dyn MaterializedViewExt>;
 }
 
-struct ViewEntry<T: Tuple> {
-    table: Table<T>,
+struct MaterializedView<T: Tuple> {
+    instance: Instance<T>,
     expression: Box<dyn Expression<T>>,
 }
 
-impl<T: Tuple + 'static> ViewEntryTrait for ViewEntry<T> {
-    fn view(&self) -> &dyn Any {
+impl<T: Tuple + 'static> MaterializedViewExt for MaterializedView<T> {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn table(&self) -> &dyn TableTrait {
-        &self.table
+    fn instance(&self) -> &dyn InstanceExt {
+        &self.instance
     }
 
-    fn update(&self, db: &Database) -> Result<()> {
+    fn recalculate(&self, db: &Database) -> Result<()> {
         let recent = self.expression.recent_tuples(&db)?;
-        self.table.insert(recent);
+        self.instance.insert(recent);
         Ok(())
     }
 
-    fn deep_clone(&self) -> Box<dyn ViewEntryTrait> {
+    fn duplicate(&self) -> Box<dyn MaterializedViewExt> {
         Box::new(Self {
-            table: self.table.clone(),
+            instance: self.instance.clone(),
             expression: (*self.expression).duplicate(),
         })
     }
 }
 
 pub struct Database {
-    relations: HashMap<String, Box<dyn TableTrait>>,
-    views: HashMap<ViewRef, Box<dyn ViewEntryTrait>>,
+    relations: HashMap<String, Box<dyn InstanceExt>>,
+    views: HashMap<ViewRef, Box<dyn MaterializedViewExt>>,
     view_counter: i32,
 }
 
@@ -174,15 +174,15 @@ impl Database {
         }
     }
 
-    pub fn deep_clone(&self) -> Self {
+    pub fn duplicate(&self) -> Self {
         let mut relations = HashMap::new();
         let mut views = HashMap::new();
 
         self.relations.iter().for_each(|(k, v)| {
-            relations.insert(k.clone(), v.deep_clone());
+            relations.insert(k.clone(), v.duplicate());
         });
         self.views.iter().for_each(|(k, v)| {
-            views.insert(k.clone(), v.deep_clone());
+            views.insert(k.clone(), v.duplicate());
         });
 
         Self {
@@ -192,8 +192,8 @@ impl Database {
         }
     }
 
-    pub fn new_relation<T: Tuple + 'static>(&mut self, name: &str) -> Relation<T> {
-        let relation: Table<T> = Table {
+    pub fn add_relation<T: Tuple + 'static>(&mut self, name: &str) -> Relation<T> {
+        let relation: Instance<T> = Instance {
             stable: Rc::new(RefCell::new(Vec::new())),
             recent: Rc::new(RefCell::new(Vec::new().into())),
             to_add: Rc::new(RefCell::new(Vec::new())),
@@ -202,27 +202,30 @@ impl Database {
         Relation::new(name)
     }
 
-    pub fn relation<T: Tuple + 'static>(&self, relation: &Relation<T>) -> Result<&Table<T>> {
+    pub(crate) fn relation_instance<T: Tuple + 'static>(
+        &self,
+        relation: &Relation<T>,
+    ) -> Result<&Instance<T>> {
         let result = self
             .relations
             .get(&relation.name)
-            .and_then(|r| r.table().downcast_ref::<Table<T>>())
-            .ok_or(anyhow!("relation not found"))?;
+            .and_then(|r| r.as_any().downcast_ref::<Instance<T>>())
+            .ok_or(anyhow!(format!("relation not found: '{}'", relation.name)))?;
         Ok(result)
     }
 
-    pub fn new_view<T: Tuple + 'static>(&mut self, expression: &impl Expression<T>) -> View<T> {
+    pub fn store_view<T: Tuple + 'static>(&mut self, expression: &impl Expression<T>) -> View<T> {
         let reference = ViewRef(self.view_counter);
 
-        let table: Table<T> = Table {
+        let table: Instance<T> = Instance {
             stable: Rc::new(RefCell::new(Vec::new())),
             recent: Rc::new(RefCell::new(Vec::new().into())),
             to_add: Rc::new(RefCell::new(Vec::new())),
         };
         self.views.insert(
             reference.clone(),
-            Box::new(ViewEntry {
-                table: table,
+            Box::new(MaterializedView {
+                instance: table,
                 expression: expression.duplicate(),
             }),
         );
@@ -232,19 +235,19 @@ impl Database {
         View::new(reference)
     }
 
-    pub fn view<T: Tuple + 'static>(&self, view: &View<T>) -> Result<&Table<T>> {
+    pub(crate) fn view_instance<T: Tuple + 'static>(&self, view: &View<T>) -> Result<&Instance<T>> {
         let result = self
             .views
             .get(&view.reference)
-            .and_then(|v| v.view().downcast_ref::<ViewEntry<T>>())
+            .and_then(|v| v.as_any().downcast_ref::<MaterializedView<T>>())
             .ok_or(anyhow!("view not found"))?;
-        Ok(&result.table)
+        Ok(&result.instance)
     }
 
-    pub fn update_views(&self) -> Result<()> {
+    pub fn recalculate_views(&self) -> Result<()> {
         while self.relation_changed() || self.view_changed() {
             for view in self.views.iter() {
-                view.1.update(&self)?
+                view.1.recalculate(&self)?
             }
         }
         Ok(())
@@ -264,7 +267,7 @@ impl Database {
     fn view_changed(&self) -> bool {
         let mut result = false;
         for view in self.views.iter() {
-            if view.1.table().changed() {
+            if view.1.instance().changed() {
                 result = true
             }
         }
@@ -313,7 +316,7 @@ mod tests {
     #[test]
     fn test_table_insert() {
         {
-            let relation = Table::<i32> {
+            let relation = Instance::<i32> {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![].into())),
                 to_add: Rc::new(RefCell::new(vec![])),
@@ -325,7 +328,7 @@ mod tests {
         }
 
         {
-            let relation: Table<i32> = Table {
+            let relation: Instance<i32> = Instance {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![1, 2, 3].into())),
                 to_add: Rc::new(RefCell::new(vec![])),
@@ -337,7 +340,7 @@ mod tests {
         }
 
         {
-            let relation: Table<i32> = Table {
+            let relation: Instance<i32> = Instance {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![1, 2, 3].into())),
                 to_add: Rc::new(RefCell::new(vec![])),
@@ -355,7 +358,7 @@ mod tests {
     #[test]
     fn test_table_changed() {
         {
-            let relation: Table<i32> = Table {
+            let relation: Instance<i32> = Instance {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![].into())),
                 to_add: Rc::new(RefCell::new(vec![])),
@@ -367,7 +370,7 @@ mod tests {
         }
 
         {
-            let relation = Table::<i32> {
+            let relation = Instance::<i32> {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![].into())),
                 to_add: Rc::new(RefCell::new(vec![vec![1, 2].into()])),
@@ -379,7 +382,7 @@ mod tests {
         }
 
         {
-            let relation = Table::<i32> {
+            let relation = Instance::<i32> {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![1, 2].into())),
                 to_add: Rc::new(RefCell::new(vec![])),
@@ -394,7 +397,7 @@ mod tests {
         }
 
         {
-            let relation = Table::<i32> {
+            let relation = Instance::<i32> {
                 stable: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![1, 2].into())),
                 to_add: Rc::new(RefCell::new(vec![vec![3, 4].into()])),
@@ -409,7 +412,7 @@ mod tests {
         }
 
         {
-            let relation = Table::<i32> {
+            let relation = Instance::<i32> {
                 stable: Rc::new(RefCell::new(vec![vec![1, 2].into()])),
                 recent: Rc::new(RefCell::new(vec![2, 3, 4].into())),
                 to_add: Rc::new(RefCell::new(vec![vec![4, 5].into()])),
@@ -424,7 +427,7 @@ mod tests {
         }
 
         {
-            let relation = Table::<i32> {
+            let relation = Instance::<i32> {
                 stable: Rc::new(RefCell::new(vec![vec![1, 2].into()])),
                 recent: Rc::new(RefCell::new(vec![2, 3, 4].into())),
                 to_add: Rc::new(RefCell::new(vec![vec![1, 5].into()])),
@@ -448,20 +451,20 @@ mod tests {
     }
 
     #[test]
-    fn test_database_deep_clone() {
+    fn test_database_duplicate() {
         {
             let database = Database::new();
-            let cloned = database.deep_clone();
+            let cloned = database.duplicate();
             assert!(cloned.relations.is_empty());
             assert!(cloned.views.is_empty());
             assert_eq!(0, cloned.view_counter);
         }
 
         {
-            let mut relations: HashMap<String, Box<dyn TableTrait>> = HashMap::new();
+            let mut relations: HashMap<String, Box<dyn InstanceExt>> = HashMap::new();
             relations.insert(
                 "a".to_string(),
-                Box::new(Table::<i32> {
+                Box::new(Instance::<i32> {
                     stable: Rc::new(RefCell::new(vec![vec![1, 2].into()])),
                     recent: Rc::new(RefCell::new(vec![2, 3, 4].into())),
                     to_add: Rc::new(RefCell::new(vec![vec![4, 5].into()])),
@@ -469,18 +472,18 @@ mod tests {
             );
             relations.insert(
                 "b".to_string(),
-                Box::new(Table::<String> {
+                Box::new(Instance::<String> {
                     stable: Rc::new(RefCell::new(vec![vec!["A".to_string()].into()])),
                     recent: Rc::new(RefCell::new(vec!["B".to_string()].into())),
                     to_add: Rc::new(RefCell::new(vec![vec!["C".to_string()].into()])),
                 }),
             );
 
-            let mut views: HashMap<ViewRef, Box<dyn ViewEntryTrait>> = HashMap::new();
+            let mut views: HashMap<ViewRef, Box<dyn MaterializedViewExt>> = HashMap::new();
             views.insert(
                 ViewRef(0),
-                Box::new(ViewEntry {
-                    table: Table::<i32> {
+                Box::new(MaterializedView {
+                    instance: Instance::<i32> {
                         stable: Rc::new(RefCell::new(vec![vec![1, 2].into()])),
                         recent: Rc::new(RefCell::new(vec![2, 3, 4].into())),
                         to_add: Rc::new(RefCell::new(vec![vec![4, 5].into()])),
@@ -495,7 +498,7 @@ mod tests {
                 view_counter: 1,
             };
 
-            let cloned = database.deep_clone();
+            let cloned = database.duplicate();
             assert_eq!(2, cloned.relations.len());
             assert_eq!(1, cloned.views.len());
             assert_eq!(1, cloned.view_counter);
@@ -505,8 +508,8 @@ mod tests {
                     .relations
                     .get("b")
                     .unwrap()
-                    .table()
-                    .downcast_ref::<Table<String>>()
+                    .as_any()
+                    .downcast_ref::<Instance<String>>()
                     .unwrap()
                     .recent
                     .borrow()
@@ -519,7 +522,7 @@ mod tests {
     #[test]
     fn test_add_relation() {
         let mut database = Database::new();
-        database.new_relation::<i32>("a");
+        database.add_relation::<i32>("a");
         assert!(database.relations.get("a").is_some());
         assert!(database.relations.get("b").is_none());
     }
@@ -528,36 +531,28 @@ mod tests {
     fn test_get_relation() {
         let mut database = Database::new();
         let mut dummy = Database::new();
-        let relation_i32 = database.new_relation::<i32>("a");
-        let relation_string = dummy.new_relation::<String>("a");
+        let relation_i32 = database.add_relation::<i32>("a");
+        let relation_string = dummy.add_relation::<String>("a");
 
-        assert!(database.relation(&relation_i32).is_ok());
-        assert!(database.relation(&relation_string).is_err());
+        assert!(database.relation_instance(&relation_i32).is_ok());
+        assert!(database.relation_instance(&relation_string).is_err());
 
-        let _ = database.new_relation::<String>("a");
-        assert!(database.relation(&relation_string).is_ok());
+        let _ = database.add_relation::<String>("a");
+        assert!(database.relation_instance(&relation_string).is_ok());
     }
 
     #[test]
-    fn test_add_view() {
+    fn test_store_view() {
         {
             let mut database = Database::new();
-            database.new_view(&Relation::<i32>::new("a"));
+            database.store_view(&Relation::<i32>::new("a"));
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
         }
 
         {
             let mut database = Database::new();
-            database.new_view(&Select::new(&Relation::<i32>::new("a"), |&t| t != 0));
-
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
-        }
-
-        {
-            let mut database = Database::new();
-            database.new_view(&Project::new(&Relation::<i32>::new("a"), |t| t + 1));
+            database.store_view(&Select::new(&Relation::<i32>::new("a"), |&t| t != 0));
 
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
@@ -565,7 +560,15 @@ mod tests {
 
         {
             let mut database = Database::new();
-            database.new_view(&Join::new(
+            database.store_view(&Project::new(&Relation::<i32>::new("a"), |t| t + 1));
+
+            assert!(database.views.get(&ViewRef(0)).is_some());
+            assert!(database.views.get(&ViewRef(1000)).is_none());
+        }
+
+        {
+            let mut database = Database::new();
+            database.store_view(&Join::new(
                 &Relation::<(i32, i32)>::new("a"),
                 &Relation::<(i32, i32)>::new("b"),
                 |_, &l, &r| (l, r),
@@ -577,8 +580,8 @@ mod tests {
 
         {
             let mut database = Database::new();
-            let view = database.new_view(&Relation::<i32>::new("a"));
-            database.new_view(&view);
+            let view = database.store_view(&Relation::<i32>::new("a"));
+            database.store_view(&view);
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
@@ -589,50 +592,50 @@ mod tests {
     fn test_get_view() {
         let mut database = Database::new();
         let mut dummy = Database::new();
-        let view_i32 = database.new_view(&Relation::<i32>::new("a"));
-        let view_string_1 = dummy.new_view(&Relation::<String>::new("a"));
+        let view_i32 = database.store_view(&Relation::<i32>::new("a"));
+        let view_string_1 = dummy.store_view(&Relation::<String>::new("a"));
 
-        assert!(database.view(&view_i32).is_ok());
-        assert!(database.view(&view_string_1).is_err());
+        assert!(database.view_instance(&view_i32).is_ok());
+        assert!(database.view_instance(&view_string_1).is_err());
 
-        let view_string_2 = database.new_view(&Relation::<String>::new("a"));
-        assert!(database.view(&view_string_1).is_err());
-        assert!(database.view(&view_string_2).is_ok());
+        let view_string_2 = database.store_view(&Relation::<String>::new("a"));
+        assert!(database.view_instance(&view_string_1).is_err());
+        assert!(database.view_instance(&view_string_2).is_ok());
     }
 
     #[test]
     fn test_relation_changed() {
         let mut database = Database::new();
-        let r = database.new_relation::<i32>("r");
+        let r = database.add_relation::<i32>("r");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();
 
         assert_eq!(
-            &Table::<i32> {
+            &Instance::<i32> {
                 to_add: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
                 recent: Rc::new(RefCell::new(vec![].into())),
                 stable: Rc::new(RefCell::new(vec![])),
             },
-            database.relation(&r).unwrap()
+            database.relation_instance(&r).unwrap()
         );
 
         assert!(database.relation_changed());
         assert_eq!(
-            &Table::<i32> {
+            &Instance::<i32> {
                 to_add: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![1, 2, 3].into())),
                 stable: Rc::new(RefCell::new(vec![])),
             },
-            database.relation(&r).unwrap()
+            database.relation_instance(&r).unwrap()
         );
 
         assert!(!database.relation_changed());
         assert_eq!(
-            &Table::<i32> {
+            &Instance::<i32> {
                 to_add: Rc::new(RefCell::new(vec![])),
                 recent: Rc::new(RefCell::new(vec![].into())),
                 stable: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
             },
-            database.relation(&r).unwrap()
+            database.relation_instance(&r).unwrap()
         );
     }
 
@@ -640,138 +643,138 @@ mod tests {
     fn test_view_changed() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v = database.new_view(&r);
+            let r = database.add_relation::<i32>("r");
+            let v = database.store_view(&r);
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
             database.relation_changed();
             database
                 .views
                 .get(&v.reference)
                 .unwrap()
-                .update(&database)
+                .recalculate(&database)
                 .unwrap();
 
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(database.view_changed());
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![1, 2, 3].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(!database.view_changed());
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
         }
 
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v = database.new_view(&Select::new(&r, |t| t % 2 == 1));
+            let r = database.add_relation::<i32>("r");
+            let v = database.store_view(&Select::new(&r, |t| t % 2 == 1));
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
             database.relation_changed();
             database
                 .views
                 .get(&v.reference)
                 .unwrap()
-                .update(&database)
+                .recalculate(&database)
                 .unwrap();
 
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![vec![1, 3].into()])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(database.view_changed());
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![1, 3].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(!database.view_changed());
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 3].into()])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
         }
 
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v = database.new_view(&Project::new(&r, |t| t + 1));
+            let r = database.add_relation::<i32>("r");
+            let v = database.store_view(&Project::new(&r, |t| t + 1));
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
             database.relation_changed();
             database
                 .views
                 .get(&v.reference)
                 .unwrap()
-                .update(&database)
+                .recalculate(&database)
                 .unwrap();
 
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![vec![2, 3, 4, 5].into()])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(database.view_changed());
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![2, 3, 4, 5].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(!database.view_changed());
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![2, 3, 4, 5].into()])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
         }
 
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
-            let v = database.new_view(&Join::new(&r, &s, |&k, _, &r| (k, r)));
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let v = database.store_view(&Join::new(&r, &s, |&k, _, &r| (k, r)));
             r.insert(vec![(1, 2), (2, 3), (3, 4)].into(), &database)
                 .unwrap();
             s.insert(vec![(2, 3), (3, 4), (4, 5)].into(), &database)
@@ -781,48 +784,48 @@ mod tests {
                 .views
                 .get(&v.reference)
                 .unwrap()
-                .update(&database)
+                .recalculate(&database)
                 .unwrap();
 
             assert_eq!(
-                &Table::<(i32, i32)> {
+                &Instance::<(i32, i32)> {
                     to_add: Rc::new(RefCell::new(vec![vec![(2, 3), (3, 4)].into()])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(database.view_changed());
             assert_eq!(
-                &Table::<(i32, i32)> {
+                &Instance::<(i32, i32)> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![(2, 3), (3, 4)].into())),
                     stable: Rc::new(RefCell::new(vec![])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
 
             assert!(!database.view_changed());
             assert_eq!(
-                &Table::<(i32, i32)> {
+                &Instance::<(i32, i32)> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![(2, 3), (3, 4)].into()])),
                 },
-                database.view(&v).unwrap()
+                database.view_instance(&v).unwrap()
             );
         }
     }
 
     #[test]
-    fn test_update_views() {
+    fn test_recalculate_views() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v_r = database.new_view(&r);
-            let s = database.new_relation::<String>("s");
-            let v_s = database.new_view(&s);
+            let r = database.add_relation::<i32>("r");
+            let v_r = database.store_view(&r);
+            let s = database.add_relation::<String>("s");
+            let v_s = database.store_view(&s);
 
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
             s.insert(
@@ -831,18 +834,18 @@ mod tests {
             )
             .unwrap();
 
-            database.update_views().unwrap();
+            database.recalculate_views().unwrap();
 
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
                 },
-                database.view(&v_r).unwrap()
+                database.view_instance(&v_r).unwrap()
             );
             assert_eq!(
-                &Table::<String> {
+                &Instance::<String> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![
@@ -852,103 +855,103 @@ mod tests {
                     ]
                     .into()])),
                 },
-                database.view(&v_s).unwrap()
+                database.view_instance(&v_s).unwrap()
             );
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v_1 = database.new_view(&r);
-            let v_2 = database.new_view(&v_1);
+            let r = database.add_relation::<i32>("r");
+            let v_1 = database.store_view(&r);
+            let v_2 = database.store_view(&v_1);
 
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
 
-            database.update_views().unwrap();
+            database.recalculate_views().unwrap();
 
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
                 },
-                database.view(&v_1).unwrap()
+                database.view_instance(&v_1).unwrap()
             );
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3].into()])),
                 },
-                database.view(&v_2).unwrap()
+                database.view_instance(&v_2).unwrap()
             );
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
-            let v_1 = database.new_view(&Join::new(&r, &s, |_, &l, &r| (l, r)));
-            let v_2 = database.new_view(&v_1);
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let v_1 = database.store_view(&Join::new(&r, &s, |_, &l, &r| (l, r)));
+            let v_2 = database.store_view(&v_1);
 
             r.insert(vec![(1, 10), (2, 20), (3, 30)].into(), &database)
                 .unwrap();
             s.insert(vec![(2, 200), (3, 300), (4, 400)].into(), &database)
                 .unwrap();
 
-            database.update_views().unwrap();
+            database.recalculate_views().unwrap();
 
             assert_eq!(
-                &Table::<(i32, i32)> {
+                &Instance::<(i32, i32)> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![(20, 200), (30, 300)].into()])),
                 },
-                database.view(&v_1).unwrap()
+                database.view_instance(&v_1).unwrap()
             );
             assert_eq!(
-                &Table::<(i32, i32)> {
+                &Instance::<(i32, i32)> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![(20, 200), (30, 300)].into()])),
                 },
-                database.view(&v_2).unwrap()
+                database.view_instance(&v_2).unwrap()
             );
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v_1 = database.new_view(&r);
-            let v_2 = database.new_view(&v_1);
+            let r = database.add_relation::<i32>("r");
+            let v_1 = database.store_view(&r);
+            let v_2 = database.store_view(&v_1);
 
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
-            database.update_views().unwrap();
+            database.recalculate_views().unwrap();
 
             r.insert(vec![4, 5].into(), &database).unwrap();
-            database.update_views().unwrap();
+            database.recalculate_views().unwrap();
 
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3, 4, 5].into()])),
                 },
-                database.view(&v_1).unwrap()
+                database.view_instance(&v_1).unwrap()
             );
             assert_eq!(
-                &Table::<i32> {
+                &Instance::<i32> {
                     to_add: Rc::new(RefCell::new(vec![])),
                     recent: Rc::new(RefCell::new(vec![].into())),
                     stable: Rc::new(RefCell::new(vec![vec![1, 2, 3, 4, 5].into()])),
                 },
-                database.view(&v_2).unwrap()
+                database.view_instance(&v_2).unwrap()
             );
         }
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let _ = database.new_view(&r);
-            let s = dummy.new_relation::<String>("s");
-            let _ = database.new_view(&s);
+            let r = database.add_relation::<i32>("r");
+            let _ = database.store_view(&r);
+            let s = dummy.add_relation::<String>("s");
+            let _ = database.store_view(&s);
 
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
             s.insert(
@@ -957,15 +960,15 @@ mod tests {
             )
             .unwrap();
 
-            assert!(database.update_views().is_err());
+            assert!(database.recalculate_views().is_err());
         }
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.new_relation::<i32>("r");
-            let _ = database.new_view(&r);
-            let s = database.new_relation::<String>("s");
-            let _ = database.new_view(&s);
+            let r = dummy.add_relation::<i32>("r");
+            let _ = database.store_view(&r);
+            let s = database.add_relation::<String>("s");
+            let _ = database.store_view(&s);
 
             r.insert(vec![1, 2, 3].into(), &dummy).unwrap();
             s.insert(
@@ -974,7 +977,7 @@ mod tests {
             )
             .unwrap();
 
-            assert!(database.update_views().is_err());
+            assert!(database.recalculate_views().is_err());
         }
     }
 }

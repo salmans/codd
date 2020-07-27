@@ -6,6 +6,16 @@ use crate::{
 use anyhow::Result;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
+pub trait Expression<T: Tuple> {
+    fn evaluate(&self, db: &Database) -> Result<Tuples<T>>;
+
+    fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>>;
+
+    fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>>;
+
+    fn duplicate(&self) -> Box<dyn Expression<T>>;
+}
+
 impl<T: Tuple, E: Expression<T>> Expression<T> for &E {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
         (*self).evaluate(db)
@@ -21,14 +31,19 @@ impl<T: Tuple, E: Expression<T>> Expression<T> for &E {
     }
 }
 
-pub trait Expression<T: Tuple> {
-    fn evaluate(&self, db: &Database) -> Result<Tuples<T>>;
-
-    fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>>;
-
-    fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>>;
-
-    fn duplicate(&self) -> Box<dyn Expression<T>>;
+impl<T: Tuple> Expression<T> for Box<dyn Expression<T>> {
+    fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
+        (**self).evaluate(db)
+    }
+    fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
+        (**self).recent_tuples(db)
+    }
+    fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
+        (**self).stable_tuples(db)
+    }
+    fn duplicate(&self) -> Box<dyn Expression<T>> {
+        (**self).duplicate()
+    }
 }
 
 #[derive(Clone)]
@@ -38,7 +53,7 @@ pub struct Relation<T: Tuple> {
 }
 
 impl<T: Tuple + 'static> Relation<T> {
-    pub(crate) fn new(name: &str) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
             _phantom: PhantomData,
@@ -46,7 +61,7 @@ impl<T: Tuple + 'static> Relation<T> {
     }
 
     pub fn insert(&self, tuples: Tuples<T>, db: &Database) -> Result<()> {
-        let relation = db.relation(&self)?;
+        let relation = db.relation_instance(&self)?;
         relation.insert(tuples);
         Ok(())
     }
@@ -54,8 +69,8 @@ impl<T: Tuple + 'static> Relation<T> {
 
 impl<T: Tuple + 'static> Expression<T> for Relation<T> {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
-        db.update_views()?;
-        let table = db.relation(&self)?;
+        db.recalculate_views()?;
+        let table = db.relation_instance(&self)?;
         assert!(table.recent.borrow().is_empty());
         assert!(table.to_add.borrow().is_empty());
 
@@ -68,13 +83,13 @@ impl<T: Tuple + 'static> Expression<T> for Relation<T> {
     }
 
     fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
-        let table = db.relation(&self)?;
+        let table = db.relation_instance(&self)?;
         Ok(table.recent.borrow().clone())
     }
 
     fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
         let mut result = Vec::<Tuples<T>>::new();
-        let table = db.relation(&self)?;
+        let table = db.relation_instance(&self)?;
         for batch in table.stable.borrow().iter() {
             result.push(batch.clone());
         }
@@ -114,7 +129,7 @@ where
     T: Tuple + 'static,
 {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
-        db.update_views()?;
+        db.recalculate_views()?;
         let mut result = self.recent_tuples(&db)?;
         for batch in self.stable_tuples(&db)? {
             result = result.merge(batch);
@@ -183,7 +198,7 @@ where
     T: Tuple + 'static,
 {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
-        db.update_views()?;
+        db.recalculate_views()?;
         let mut result = self.recent_tuples(&db)?;
         for batch in self.stable_tuples(&db)? {
             result = result.merge(batch);
@@ -256,7 +271,7 @@ where
     T: Tuple + 'static,
 {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
-        db.update_views()?;
+        db.recalculate_views()?;
 
         let mut result = self.recent_tuples(&db)?;
         for batch in self.stable_tuples(&db)? {
@@ -336,8 +351,8 @@ impl<T: Tuple + 'static> View<T> {
 
 impl<T: Tuple + 'static> Expression<T> for View<T> {
     fn evaluate(&self, db: &Database) -> Result<Tuples<T>> {
-        db.update_views()?;
-        let table = db.view(&self)?;
+        db.recalculate_views()?;
+        let table = db.view_instance(&self)?;
         assert!(table.recent.borrow().is_empty());
         assert!(table.to_add.borrow().is_empty());
 
@@ -350,13 +365,13 @@ impl<T: Tuple + 'static> Expression<T> for View<T> {
     }
 
     fn recent_tuples(&self, db: &Database) -> Result<Tuples<T>> {
-        let table = db.view(&self)?;
+        let table = db.view_instance(&self)?;
         Ok(table.recent.borrow().clone())
     }
 
     fn stable_tuples(&self, db: &Database) -> Result<Vec<Tuples<T>>> {
         let mut result = Vec::<Tuples<T>>::new();
-        let table = db.view(&self)?;
+        let table = db.view_instance(&self)?;
         for batch in table.stable.borrow().iter() {
             result.push(batch.clone());
         }
@@ -381,30 +396,30 @@ mod tests {
     fn test_insert_relation() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             assert!(r.insert(vec![1, 2, 3].into(), &database).is_ok());
             assert_eq!(
                 Tuples::<i32>::from(vec![1, 2, 3]),
-                database.relation(&r).unwrap().to_add.borrow()[0]
+                database.relation_instance(&r).unwrap().to_add.borrow()[0]
             );
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             assert!(r.insert(vec![1, 2, 3].into(), &database).is_ok());
             assert!(r.insert(vec![1, 4].into(), &database).is_ok());
             assert_eq!(
                 Tuples::<i32>::from(vec![1, 2, 3]),
-                database.relation(&r).unwrap().to_add.borrow()[0]
+                database.relation_instance(&r).unwrap().to_add.borrow()[0]
             );
             assert_eq!(
                 Tuples::<i32>::from(vec![1, 4]),
-                database.relation(&r).unwrap().to_add.borrow()[1]
+                database.relation_instance(&r).unwrap().to_add.borrow()[1]
             );
         }
         {
             let database = Database::new();
-            let r = Database::new().new_relation("r"); // dummy database
+            let r = Database::new().add_relation("r"); // dummy database
             assert!(r.insert(vec![1, 2, 3].into(), &database).is_err());
         }
     }
@@ -412,7 +427,7 @@ mod tests {
     #[test]
     fn test_duplicate_relation() {
         let mut database = Database::new();
-        let r = database.new_relation::<i32>("r");
+        let r = database.add_relation::<i32>("r");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 2, 3]),
@@ -423,7 +438,7 @@ mod tests {
     #[test]
     fn test_duplicate_select() {
         let mut database = Database::new();
-        let r = database.new_relation::<i32>("r");
+        let r = database.add_relation::<i32>("r");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();
         let p = Select::new(&r, |&t| t % 2 == 1).duplicate();
         assert_eq!(
@@ -435,7 +450,7 @@ mod tests {
     #[test]
     fn test_duplicate_project() {
         let mut database = Database::new();
-        let r = database.new_relation::<i32>("r");
+        let r = database.add_relation::<i32>("r");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();
         let p = Project::new(&r, |&t| t * 10).duplicate();
         assert_eq!(
@@ -447,8 +462,8 @@ mod tests {
     #[test]
     fn test_duplicate_join() {
         let mut database = Database::new();
-        let r = database.new_relation::<(i32, i32)>("r");
-        let s = database.new_relation::<(i32, i32)>("s");
+        let r = database.add_relation::<(i32, i32)>("r");
+        let s = database.add_relation::<(i32, i32)>("s");
         r.insert(vec![(1, 10)].into(), &database).unwrap();
         s.insert(vec![(1, 100)].into(), &database).unwrap();
         let v = Join::new(&r, &s, |_, &l, &r| (l, r)).duplicate();
@@ -461,8 +476,8 @@ mod tests {
     #[test]
     fn test_duplicate_view() {
         let mut database = Database::new();
-        let r = database.new_relation::<i32>("r");
-        let v = database.new_view(&r).duplicate();
+        let r = database.add_relation::<i32>("r");
+        let v = database.store_view(&r).duplicate();
         r.insert(vec![1, 2, 3].into(), &database).unwrap();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 2, 3]),
@@ -474,7 +489,7 @@ mod tests {
     fn test_evaluate_relation() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
             let result = r.evaluate(&database).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
@@ -482,7 +497,7 @@ mod tests {
         {
             let database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.new_relation::<i32>("r");
+            let r = dummy.add_relation::<i32>("r");
 
             assert!(r.evaluate(&database).is_err());
         }
@@ -492,7 +507,7 @@ mod tests {
     fn test_evaluate_select() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             let project = Select::new(&r, |t| t % 2 == 1);
 
             let result = project.evaluate(&database).unwrap();
@@ -500,7 +515,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             let select = Select::new(&r, |t| t % 2 == 0);
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
 
@@ -509,7 +524,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             let p1 = Select::new(&r, |t| t % 2 == 0);
             let p2 = Select::new(&p1, |&t| t > 3);
 
@@ -521,7 +536,7 @@ mod tests {
         {
             let database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.new_relation::<i32>("r");
+            let r = dummy.add_relation::<i32>("r");
             let select = Select::new(&r, |&t| t > 1);
             assert!(select.evaluate(&database).is_err());
         }
@@ -531,7 +546,7 @@ mod tests {
     fn test_evaluate_project() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             let project = Project::new(&r, |t| t * 10);
 
             let result = project.evaluate(&database).unwrap();
@@ -539,7 +554,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             let project = Project::new(&r, |t| t * 10);
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
 
@@ -548,7 +563,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r");
             let p1 = Project::new(&r, |t| t * 10);
             let p2 = Project::new(&p1, |t| t + 1);
 
@@ -560,7 +575,7 @@ mod tests {
         {
             let database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.new_relation::<i32>("r");
+            let r = dummy.add_relation::<i32>("r");
             let project = Project::new(&r, |t| t + 1);
             assert!(project.evaluate(&database).is_err());
         }
@@ -570,8 +585,8 @@ mod tests {
     fn test_evaluate_join() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
 
             let result = join.evaluate(&database).unwrap();
@@ -579,8 +594,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
             r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
                 .unwrap();
@@ -589,8 +604,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
             s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
                 .unwrap();
@@ -600,8 +615,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
             r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
                 .unwrap();
@@ -616,9 +631,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
-            let t = database.new_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
             let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
 
@@ -635,8 +650,8 @@ mod tests {
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = dummy.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = dummy.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
             assert!(join.evaluate(&database).is_err());
         }
@@ -646,28 +661,28 @@ mod tests {
     fn test_evaluate_view() {
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v = database.new_view(&r);
+            let r = database.add_relation::<i32>("r");
+            let v = database.store_view(&r);
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
             let result = v.evaluate(&database).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<i32>("r");
-            let v_1 = database.new_view(&r);
-            let v_2 = database.new_view(&v_1);
-            let v_3 = database.new_view(&v_2);
+            let r = database.add_relation::<i32>("r");
+            let v_1 = database.store_view(&r);
+            let v_2 = database.store_view(&v_1);
+            let v_3 = database.store_view(&v_2);
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
             let result = v_3.evaluate(&database).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
-            let view = database.new_view(&r_s);
+            let view = database.store_view(&r_s);
 
             r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
                 .unwrap();
@@ -682,10 +697,10 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
-            let view = database.new_view(&r_s);
+            let view = database.store_view(&r_s);
 
             r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
                 .unwrap();
@@ -702,12 +717,12 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.new_relation::<(i32, i32)>("r");
-            let s = database.new_relation::<(i32, i32)>("s");
-            let t = database.new_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
             let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
-            let view = database.new_view(&r_s_t);
+            let view = database.store_view(&r_s_t);
 
             r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
                 .unwrap();
