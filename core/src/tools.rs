@@ -1,5 +1,26 @@
 use crate::{database::Tuples, Tuple};
 
+pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T] {
+    if slice.len() > 0 && cmp(&slice[0]) {
+        let mut step = 1;
+        while step < slice.len() && cmp(&slice[step]) {
+            slice = &slice[step..];
+            step = step << 1;
+        }
+
+        step = step >> 1;
+        while step > 0 {
+            if step < slice.len() && cmp(&slice[step]) {
+                slice = &slice[step..];
+            }
+            step = step >> 1;
+        }
+
+        slice = &slice[1..];
+    }
+    slice
+}
+
 pub(crate) fn project_helper<T: Tuple>(input: &Tuples<T>, mut result: impl FnMut(&T)) {
     let slice = &input[..];
     for tuple in slice {
@@ -36,25 +57,4 @@ pub(crate) fn join_helper<Key: Tuple, Val1: Tuple, Val2: Tuple>(
             Ordering::Greater => slice2 = gallop(slice2, |x| x.0 < slice1[0].0),
         }
     }
-}
-
-pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T] {
-    if slice.len() > 0 && cmp(&slice[0]) {
-        let mut step = 1;
-        while step < slice.len() && cmp(&slice[step]) {
-            slice = &slice[step..];
-            step = step << 1;
-        }
-
-        step = step >> 1;
-        while step > 0 {
-            if step < slice.len() && cmp(&slice[step]) {
-                slice = &slice[step..];
-            }
-            step = step >> 1;
-        }
-
-        slice = &slice[1..];
-    }
-    slice
 }

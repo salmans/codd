@@ -42,7 +42,7 @@ macro_rules! relalg {
 #[macro_export]
 macro_rules! relexp {
     ($r:ident) => {
-        &$r
+        (&$r).clone()
     };
     (select [$proj:expr] from ($($rel_exp:tt)*) $(where [$pred:expr])?) => {
         $crate::relexp!(@select ($($rel_exp)*) @proj -> [$proj] $(@pred -> [$pred])?)
@@ -79,7 +79,7 @@ macro_rules! relexp {
 #[cfg(test)]
 mod tests {
     use crate::{relalg, relexp};
-    use crate::{Database, Expression, Tuples};
+    use crate::{Database, Tuples};
 
     #[test]
     fn test_relalg() {
@@ -93,7 +93,7 @@ mod tests {
             let r = relalg! { create relation "r" [i32] in database};
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let exp = relalg! { select * from(r) };
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3, 4]), result);
         }
         {
@@ -101,7 +101,7 @@ mod tests {
             let r = relalg! { create relation "r" [i32] in database};
             let exp = relalg!(select * from (r) where [|t| t % 2 == 0]);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
         }
         {
@@ -111,7 +111,7 @@ mod tests {
                                  (select * from (r) where [|&t| t > 2])
                 where [|t| t % 2 == 0]);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![4]), result);
         }
         {
@@ -120,7 +120,7 @@ mod tests {
             let exp = relalg!(select [|t| t + 1] from
                                  (select * from (r) where [|&t| t > 2]));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![4, 5]), result);
         }
         {
@@ -144,7 +144,7 @@ mod tests {
             let r = relalg! { create relation "r" [i32] in database};
             let exp = relexp!(r);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3, 4]), result);
         }
         {
@@ -152,7 +152,7 @@ mod tests {
             let r = relalg! { create relation "r" [i32] in database};
             let exp = relexp!(select * from (r) where [|t| t % 2 == 0]);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
         }
         {
@@ -162,7 +162,7 @@ mod tests {
                                  (select * from (r) where [|&t| t > 2])
                 where [|t| t % 2 == 0]);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![4]), result);
         }
         {
@@ -170,7 +170,7 @@ mod tests {
             let r = relalg! { create relation "r" [i32] in database};
             let exp = relexp!(select [|t| t + 1] from (r));
             relalg! (insert into (r) values [3, 4, 5, 6] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![4, 5, 6, 7]), result);
         }
         {
@@ -179,7 +179,7 @@ mod tests {
             let exp = relexp!(select [|t| t + 1] from
                                  (select * from (r) where [|&t| t > 2]));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![4, 5]), result);
         }
         {
@@ -187,7 +187,7 @@ mod tests {
             let r = relalg! { create relation "r" [i32] in database};
             let exp = relexp!(select * from(r));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3, 4]), result);
         }
         {
@@ -209,7 +209,7 @@ mod tests {
             ] in database)
             .unwrap();
 
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(
                 Tuples::from(vec!["ax".to_string(), "by".to_string()]),
                 result
@@ -221,13 +221,13 @@ mod tests {
             let v = relalg! { create view as (select * from (r)) in database};
             let exp = relexp!(select * from(v));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3, 4]), result);
 
             // updating the view
             relalg! (insert into (r) values [100, 200, 300] in database).unwrap();
             let exp = relexp!(select [|&x| x + 1] from (v) where [|&x| x >= 100]);
-            let result = exp.evaluate(&database).unwrap();
+            let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![101, 201, 301]), result);
         }
     }

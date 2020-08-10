@@ -1,5 +1,5 @@
 use anyhow::Result;
-use relalg::{relalg, Database, Expression};
+use relalg::{relalg, Database};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Person {
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
         )
     };
 
-    let names = fathers_name.evaluate(&family);
+    let names = family.evaluate(&fathers_name);
 
     for name in names.iter() {
         println!("{:?}", name);
