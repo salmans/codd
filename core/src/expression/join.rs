@@ -82,7 +82,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Database;
+    use crate::{Database, Singleton};
 
     #[test]
     fn test_clone_join() {
@@ -118,6 +118,19 @@ mod tests {
                 .unwrap();
             let result = database.evaluate(&join).unwrap();
             assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s1 = Singleton((1, 2));
+            let s2 = Singleton((3, 5));
+            let r_s1 = Join::new(&r, &s1, |_, &l, &r| (l, r));
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            database.evaluate(&r_s1).unwrap(); // materialize the first view
+            let r_s1_s2 = Join::new(&r_s1, &s2, |_, &l, &r| (l, r));
+            let result = database.evaluate(&r_s1_s2).unwrap();
+            assert_eq!(Tuples::from(vec![(2, 5)]), result);
         }
         {
             let mut database = Database::new();

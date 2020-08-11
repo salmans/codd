@@ -2,6 +2,7 @@ mod join;
 mod project;
 mod relation;
 mod select;
+mod singleton;
 mod view;
 
 use crate::{database::Tuples, Tuple};
@@ -11,6 +12,7 @@ pub use join::Join;
 pub use project::Project;
 pub use relation::Relation;
 pub use select::Select;
+pub use singleton::Singleton;
 pub use view::View;
 
 pub trait Expression<T: Tuple>: Clone {
@@ -28,6 +30,13 @@ pub trait Expression<T: Tuple>: Clone {
 }
 
 pub trait Visitor: Sized {
+    fn visit_singleton<T>(&mut self, singleton: &Singleton<T>)
+    where
+        T: Tuple,
+    {
+        walk_singlenton(self, singleton)
+    }
+
     fn visit_relation<T>(&mut self, relation: &Relation<T>)
     where
         T: Tuple,
@@ -71,6 +80,14 @@ pub trait Visitor: Sized {
     {
         walk_view(self, view);
     }
+}
+
+pub fn walk_singlenton<T, V>(_: &mut V, _: &Singleton<T>)
+where
+    T: Tuple,
+    V: Visitor,
+{
+    // nothing to do
 }
 
 pub fn walk_relation<T, V>(_: &mut V, _: &Relation<T>)
@@ -124,6 +141,10 @@ where
 }
 
 pub trait Collector {
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple;
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
     where
         T: Tuple;
@@ -158,6 +179,10 @@ pub trait Collector {
 }
 
 pub trait ListCollector {
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple;
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple;

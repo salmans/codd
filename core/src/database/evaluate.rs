@@ -1,15 +1,24 @@
 use super::{elements::Elements, Database, Tuples};
 use crate::{
-    expression::{Collector, ListCollector},
+    expression::{
+        Collector, Expression, Join, ListCollector, Project, Relation, Select, Singleton, View,
+    },
     tools::join_helper,
     tools::project_helper,
-    Expression, Join, Project, Relation, Select, Tuple, View,
+    Tuple,
 };
 use anyhow::Result;
 
 pub(crate) struct Recent<'d>(pub &'d Database);
 
 impl<'d> Collector for Recent<'d> {
+    fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -102,6 +111,13 @@ impl<'d> Collector for Recent<'d> {
 pub(crate) struct Stable<'d>(&'d Database);
 
 impl<'d> ListCollector for Stable<'d> {
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+    {
+        Ok(vec![vec![singleton.0.clone()].into()])
+    }
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple,
@@ -197,6 +213,13 @@ impl<'d> ListCollector for Stable<'d> {
 pub(crate) struct Evaluator<'d>(pub &'d Database);
 
 impl<'d> Collector for Evaluator<'d> {
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        Ok(vec![singleton.0.clone()].into())
+    }
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
     where
         T: Tuple,
