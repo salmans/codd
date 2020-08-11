@@ -67,7 +67,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Database;
+    use crate::{Database, Singleton};
 
     #[test]
     fn test_clone_select() {
@@ -90,6 +90,14 @@ mod tests {
 
             let result = database.evaluate(&project).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let database = Database::new();
+            let s = Singleton(42);
+            let select = Select::new(&s, |t| t % 2 == 0);
+
+            let result = database.evaluate(&select).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42]), result);
         }
         {
             let mut database = Database::new();

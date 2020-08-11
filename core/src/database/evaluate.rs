@@ -1,15 +1,24 @@
 use super::{elements::Elements, Database, Tuples};
 use crate::{
-    expression::{Collector, ListCollector},
+    expression::{
+        Collector, Expression, Join, ListCollector, Project, Relation, Select, Singleton, View,
+    },
     tools::join_helper,
     tools::project_helper,
-    Expression, Join, Project, Relation, Select, Tuple, View,
+    Tuple,
 };
 use anyhow::Result;
 
-pub(crate) struct Recent<'d>(pub &'d Database);
+pub(crate) struct Incremental<'d>(pub &'d Database);
 
-impl<'d> Collector for Recent<'d> {
+impl<'d> Collector for Incremental<'d> {
+    fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -60,13 +69,13 @@ impl<'d> Collector for Recent<'d> {
         Right: Expression<(K, R)>,
     {
         let mut result = Vec::new();
-        let stable = Stable(self.0);
+        let incremental = Incremental(self.0);
 
         let left_recent = join.left().collect(self)?;
         let right_recent = join.right().collect(self)?;
 
-        let left_stable = join.left().collect_list(&stable)?;
-        let right_stable = join.right().collect_list(&stable)?;
+        let left_stable = join.left().collect_list(&incremental)?;
+        let right_stable = join.right().collect_list(&incremental)?;
 
         let mapper = &mut (*join.mapper().borrow_mut());
 
@@ -99,9 +108,14 @@ impl<'d> Collector for Recent<'d> {
     }
 }
 
-pub(crate) struct Stable<'d>(&'d Database);
+impl<'d> ListCollector for Incremental<'d> {
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+    {
+        Ok(vec![vec![singleton.0.clone()].into()])
+    }
 
-impl<'d> ListCollector for Stable<'d> {
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple,
@@ -197,6 +211,13 @@ impl<'d> ListCollector for Stable<'d> {
 pub(crate) struct Evaluator<'d>(pub &'d Database);
 
 impl<'d> Collector for Evaluator<'d> {
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        Ok(vec![singleton.0.clone()].into())
+    }
+
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -206,11 +227,10 @@ impl<'d> Collector for Evaluator<'d> {
         assert!(table.recent.borrow().is_empty());
         assert!(table.to_add.borrow().is_empty());
 
-        let recent = Recent(self.0);
-        let stable = Stable(self.0);
+        let incremental = Incremental(self.0);
 
-        let mut result = relation.collect(&recent)?;
-        for batch in relation.collect_list(&stable)? {
+        let mut result = relation.collect(&incremental)?;
+        for batch in relation.collect_list(&incremental)? {
             result = result.merge(batch);
         }
 
@@ -233,11 +253,10 @@ impl<'d> Collector for Evaluator<'d> {
             self.0.recalculate_view(&r)?;
         }
 
-        let recent = Recent(self.0);
-        let stable = Stable(self.0);
+        let incremental = Incremental(self.0);
 
-        let mut result = select.collect(&recent)?;
-        for batch in select.collect_list(&stable)? {
+        let mut result = select.collect(&incremental)?;
+        for batch in select.collect_list(&incremental)? {
             result = result.merge(batch);
         }
         Ok(result)
@@ -260,11 +279,10 @@ impl<'d> Collector for Evaluator<'d> {
             self.0.recalculate_view(&r)?;
         }
 
-        let recent = Recent(self.0);
-        let stable = Stable(self.0);
+        let incremental = Incremental(self.0);
 
-        let mut result = project.collect(&recent)?;
-        for batch in project.collect_list(&stable)? {
+        let mut result = project.collect(&incremental)?;
+        for batch in project.collect_list(&incremental)? {
             result = result.merge(batch);
         }
         Ok(result)
@@ -293,11 +311,10 @@ impl<'d> Collector for Evaluator<'d> {
             self.0.recalculate_view(&r)?;
         }
 
-        let recent = Recent(self.0);
-        let stable = Stable(self.0);
+        let incremental = Incremental(self.0);
 
-        let mut result = join.collect(&recent)?;
-        for batch in join.collect_list(&stable)? {
+        let mut result = join.collect(&incremental)?;
+        for batch in join.collect_list(&incremental)? {
             result = result.merge(batch);
         }
 
@@ -314,11 +331,10 @@ impl<'d> Collector for Evaluator<'d> {
         assert!(table.recent.borrow().is_empty());
         assert!(table.to_add.borrow().is_empty());
 
-        let recent = Recent(self.0);
-        let stable = Stable(self.0);
+        let incremental = Incremental(self.0);
 
-        let mut result = view.collect(&recent)?;
-        for batch in view.collect_list(&stable)? {
+        let mut result = view.collect(&incremental)?;
+        for batch in view.collect_list(&incremental)? {
             result = result.merge(batch);
         }
 
