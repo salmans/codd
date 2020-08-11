@@ -159,7 +159,7 @@ where
     }
 
     fn recalculate(&self, db: &Database) -> Result<()> {
-        let recent = evaluate::Recent(db);
+        let recent = evaluate::Incremental(db);
         let recent = self.expression.collect(&recent)?;
         self.instance.insert(recent);
         Ok(())
