@@ -4,7 +4,7 @@ mod macros;
 mod tools;
 
 pub use database::{Database, Tuples};
-pub use expression::{Expression, Join, Project, Relation, Select, Singleton, View};
+pub use expression::{Expression, Join, Project, Relation, Select, Singleton, Union, View};
 
 pub trait Tuple: Ord + Clone + 'static {}
 impl<T: Ord + Clone + 'static> Tuple for T {}

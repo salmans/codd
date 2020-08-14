@@ -1,5 +1,5 @@
 use super::{Expression, Visitor};
-use crate::{database::Tuples, Tuple};
+use crate::{Tuple, Tuples};
 use anyhow::Result;
 use std::{cell::RefCell, rc::Rc};
 

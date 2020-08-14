@@ -3,6 +3,7 @@ mod project;
 mod relation;
 mod select;
 mod singleton;
+mod union;
 mod view;
 
 use crate::{database::Tuples, Tuple};
@@ -13,6 +14,7 @@ pub use project::Project;
 pub use relation::Relation;
 pub use select::Select;
 pub use singleton::Singleton;
+pub use union::Union;
 pub use view::View;
 
 pub trait Expression<T: Tuple>: Clone {
@@ -50,6 +52,15 @@ pub trait Visitor: Sized {
         E: Expression<T>,
     {
         walk_select(self, select);
+    }
+
+    fn visit_union<T, L, R>(&mut self, union: &Union<T, L, R>)
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
+    {
+        walk_union(self, union);
     }
 
     fn visit_project<S, T, E>(&mut self, project: &Project<S, T, E>)
@@ -107,6 +118,17 @@ where
     select.expression().visit(visitor);
 }
 
+pub fn walk_union<T, L, R, V>(visitor: &mut V, union: &Union<T, L, R>)
+where
+    T: Tuple,
+    L: Expression<T>,
+    R: Expression<T>,
+    V: Visitor,
+{
+    union.left().visit(visitor);
+    union.right().visit(visitor);
+}
+
 pub fn walk_project<S, T, E, V>(visitor: &mut V, project: &Project<S, T, E>)
 where
     T: Tuple,
@@ -154,6 +176,12 @@ pub trait Collector {
         T: Tuple,
         E: Expression<T>;
 
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
     fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -191,6 +219,12 @@ pub trait ListCollector {
     where
         T: Tuple,
         E: Expression<T>;
+
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
 
     fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>>
     where
