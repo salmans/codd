@@ -58,7 +58,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::Join;
+    use super::super::{Join, Union};
     use super::*;
     use crate::Database;
 
@@ -150,6 +150,28 @@ mod tests {
 
             let result = database.evaluate(&view).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
+            let rs = Union::new(&r, &s);
+            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let view = database.store_view(&rs_t);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(
+                Tuples::<i32>::from(vec![82, 84, 120, 160, 200, 240]),
+                result
+            );
         }
     }
 }

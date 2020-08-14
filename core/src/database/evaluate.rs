@@ -1,7 +1,8 @@
 use super::{elements::Elements, Database, Tuples};
 use crate::{
     expression::{
-        Collector, Expression, Join, ListCollector, Project, Relation, Select, Singleton, View,
+        Collector, Expression, Join, ListCollector, Project, Relation, Select, Singleton, Union,
+        View,
     },
     tools::join_helper,
     tools::project_helper,
@@ -40,6 +41,23 @@ impl<'d> Collector for Incremental<'d> {
                 result.push(tuple.clone());
             }
         }
+        Ok(result.into())
+    }
+
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
+    {
+        let mut result = Vec::new();
+
+        let left_recent = union.left().collect(self)?;
+        let right_recent = union.right().collect(self)?;
+
+        project_helper(&left_recent, |t| result.push(t.clone()));
+        project_helper(&right_recent, |t| result.push(t.clone()));
+
         Ok(result.into())
     }
 
@@ -145,6 +163,30 @@ impl<'d> ListCollector for Incremental<'d> {
             }
             result.push(tuples.into());
         }
+        Ok(result)
+    }
+
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
+    {
+        let mut result = Vec::<Tuples<T>>::new();
+        let left_stable = union.left().collect_list(self)?;
+        let right_stable = union.right().collect_list(self)?;
+
+        for batch in left_stable.iter() {
+            let mut tuples = Vec::new();
+            project_helper(&batch, |t| tuples.push(t.clone()));
+            result.push(tuples.into());
+        }
+        for batch in right_stable.iter() {
+            let mut tuples = Vec::new();
+            project_helper(&batch, |t| tuples.push(t.clone()));
+            result.push(tuples.into());
+        }
+
         Ok(result)
     }
 
@@ -262,6 +304,32 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
+    {
+        let mut elements = crate::database::elements::Elements::new();
+        union.visit(&mut elements);
+
+        for r in elements.relations() {
+            self.0.recalculate_relation(&r)?;
+        }
+
+        for r in elements.views() {
+            self.0.recalculate_view(&r)?;
+        }
+
+        let incremental = Incremental(self.0);
+
+        let mut result = union.collect(&incremental)?;
+        for batch in union.collect_list(&incremental)? {
+            result = result.merge(batch);
+        }
+        Ok(result)
+    }
+
     fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -339,5 +407,105 @@ impl<'d> Collector for Evaluator<'d> {
         }
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Database;
+
+    #[test]
+    fn test_clone_select() {
+        let mut database = Database::new();
+        let r = database.add_relation::<i32>("r");
+        let s = database.add_relation::<i32>("s");
+        r.insert(vec![1, 2, 3].into(), &database).unwrap();
+        r.insert(vec![4, 5].into(), &database).unwrap();
+        let u = Union::new(&r, &s).clone();
+        assert_eq!(
+            Tuples::<i32>::from(vec![1, 2, 3, 4, 5]),
+            database.evaluate(&u).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_evaluate_select() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            s.insert(vec![4, 5].into(), &database).unwrap();
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![4, 5]), result);
+        }
+
+        {
+            let database = Database::new();
+            let r = Singleton(42);
+            let s = Singleton(43);
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Union::new(&r, &s);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![0, 4, 5, 6].into(), &database).unwrap();
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![0, 1, 2, 3, 4, 5, 6]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let t = database.add_relation::<i32>("t");
+            let u1 = Union::new(&r, &s);
+            let u2 = Union::new(&u1, &t);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![100, 5, 200].into(), &database).unwrap();
+            t.insert(vec![40, 30, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&u2).unwrap();
+            assert_eq!(
+                Tuples::<i32>::from(vec![1, 2, 3, 4, 5, 30, 40, 100, 200]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Union::new(&r, &s);
+            assert!(database.evaluate(&u).is_err());
+        }
     }
 }

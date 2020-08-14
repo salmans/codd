@@ -44,6 +44,9 @@ macro_rules! relexp {
     ($r:ident) => {
         (&$r).clone()
     };
+    ([$s:expr]) => {
+        $crate::Singleton($s)
+    };
     (select [$proj:expr] from ($($rel_exp:tt)*) $(where [$pred:expr])?) => {
         $crate::relexp!(@select ($($rel_exp)*) @proj -> [$proj] $(@pred -> [$pred])?)
     };
@@ -52,6 +55,9 @@ macro_rules! relexp {
     };
     (($($left:tt)*) join ($($right:tt)*) on [$mapper:expr]) => {
         $crate::relexp!(@join ($($left)*) ($($right)*) @mapper -> [$mapper])
+    };
+    (($($left:tt)*) union ($($right:tt)*)) => {
+        $crate::relexp!(@union ($($left)*) ($($right)*))
     };
     (@select ($($rel_exp:tt)*) @proj -> [$proj:expr] @pred -> [$pred:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
@@ -73,6 +79,11 @@ macro_rules! relexp {
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
         $crate::Join::new(&left, &right, $mapper)
+    }};
+    (@union ($($left:tt)*) ($($right:tt)*)) => {{
+        let left = $crate::relexp!($($left)*);
+        let right = $crate::relexp!($($right)*);
+        $crate::Union::new(&left, &right)
     }};
 }
 
@@ -135,10 +146,22 @@ mod tests {
             let v = relalg! { create view as (select [|&x| x > 0] from (r)) in database};
             assert!(database.view_instance(&v).is_ok());
         }
+        {
+            let database = Database::new();
+            let exp = relalg! { select * from (([42]) union ([43]))};
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
     }
 
     #[test]
     fn test_relexp() {
+        {
+            let database = Database::new();
+            let exp = relexp!([42]);
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42]), result);
+        }
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r" [i32] in database};
@@ -212,6 +235,32 @@ mod tests {
             let result = database.evaluate(&exp).unwrap();
             assert_eq!(
                 Tuples::from(vec!["ax".to_string(), "by".to_string()]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = relalg! { create relation "r" [String] in database};
+            let s = relalg! { create relation "s" [String] in database};
+            let exp = relexp!((r) union (s));
+            relalg! (insert into (r) values [
+                "a".to_string(),
+                "b".to_string(),
+            ] in database)
+            .unwrap();
+            relalg! (insert into (s) values [
+                "x".to_string(), "b".to_string(), "y".to_string() 
+            ] in database)
+            .unwrap();
+
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(
+                Tuples::from(vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "x".to_string(),
+                    "y".to_string()
+                ]),
                 result
             );
         }
