@@ -35,7 +35,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{Database, Tuples};
 
     #[test]
     fn test_new_singleton() {
@@ -46,15 +45,5 @@ mod tests {
     fn test_clone_singleton() {
         let s = Singleton(42);
         assert_eq!(42, s.clone().0);
-    }
-
-    #[test]
-    fn test_evaluate_singleton() {
-        {
-            let database = Database::new();
-            let s = Singleton(42);
-            let result = database.evaluate(&s).unwrap();
-            assert_eq!(Tuples::from(vec![42]), result);
-        }
     }
 }

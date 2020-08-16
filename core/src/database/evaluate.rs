@@ -545,3 +545,576 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_singleton() {
+        {
+            let database = Database::new();
+            let s = Singleton(42);
+            let result = database.evaluate(&s).unwrap();
+            assert_eq!(Tuples::from(vec![42]), result);
+        }
+    }
+    #[test]
+    fn test_evaluate_relation() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let result = database.evaluate(&r).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+        }
+        {
+            let database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+
+            assert!(database.evaluate(&r).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_project() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let project = Project::new(&r, |t| t * 10);
+
+            let result = database.evaluate(&project).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let project = Project::new(&r, |t| t * 10);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&project).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![10, 20, 30, 40]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let p1 = Project::new(&r, |t| t * 10);
+            let p2 = Project::new(&p1, |t| t + 1);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&p2).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![11, 21, 31, 41]), result);
+        }
+        {
+            let database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let project = Project::new(&r, |t| t + 1);
+            assert!(database.evaluate(&project).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_select() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let project = Select::new(&r, |t| t % 2 == 1);
+
+            let result = database.evaluate(&project).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let database = Database::new();
+            let s = Singleton(42);
+            let select = Select::new(&s, |t| t % 2 == 0);
+
+            let result = database.evaluate(&select).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let select = Select::new(&r, |t| t % 2 == 0);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&select).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let p1 = Select::new(&r, |t| t % 2 == 0);
+            let p2 = Select::new(&p1, |&t| t > 3);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&p2).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![4]), result);
+        }
+        {
+            let database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let select = Select::new(&r, |&t| t > 1);
+            assert!(database.evaluate(&select).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_join() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+
+            let result = database.evaluate(&join).unwrap();
+            assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            let result = database.evaluate(&join).unwrap();
+            assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s1 = Singleton((1, 2));
+            let s2 = Singleton((3, 5));
+            let r_s1 = Join::new(&r, &s1, |_, &l, &r| (l, r));
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            database.evaluate(&r_s1).unwrap(); // materialize the first view
+            let r_s1_s2 = Join::new(&r_s1, &s2, |_, &l, &r| (l, r));
+            let result = database.evaluate(&r_s1_s2).unwrap();
+            assert_eq!(Tuples::from(vec![(2, 5)]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&join).unwrap();
+            assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&join).unwrap();
+            assert_eq!(
+                Tuples::<(i32, i32)>::from(vec![(3, 5), (3, 6), (4, 5), (4, 6)]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
+            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&r_s_t).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
+        {
+            let mut database = Database::new();
+            let mut dummy = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = dummy.add_relation::<(i32, i32)>("s");
+            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            assert!(database.evaluate(&join).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_union() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            s.insert(vec![4, 5].into(), &database).unwrap();
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![4, 5]), result);
+        }
+
+        {
+            let database = Database::new();
+            let r = Singleton(42);
+            let s = Singleton(43);
+            let u = Union::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Union::new(&r, &s);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![0, 4, 5, 6].into(), &database).unwrap();
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![0, 1, 2, 3, 4, 5, 6]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let t = database.add_relation::<i32>("t");
+            let u1 = Union::new(&r, &s);
+            let u2 = Union::new(&u1, &t);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![100, 5, 200].into(), &database).unwrap();
+            t.insert(vec![40, 30, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&u2).unwrap();
+            assert_eq!(
+                Tuples::<i32>::from(vec![1, 2, 3, 4, 5, 30, 40, 100, 200]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Union::new(&r, &s);
+            assert!(database.evaluate(&u).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_intersect() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Intersect::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let u = Intersect::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            s.insert(vec![4, 5].into(), &database).unwrap();
+            let u = Intersect::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+
+        {
+            let database = Database::new();
+            let r = Singleton(42);
+            let s = Singleton(43);
+            let u = Intersect::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Intersect::new(&r, &s);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![0, 4, 2, 6].into(), &database).unwrap();
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let t = database.add_relation::<i32>("t");
+            let u1 = Intersect::new(&r, &s);
+            let u2 = Intersect::new(&u1, &t);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![100, 4, 2].into(), &database).unwrap();
+            t.insert(vec![40, 2, 4, 100].into(), &database).unwrap();
+
+            let result = database.evaluate(&u2).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
+        }
+        {
+            let mut database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Intersect::new(&r, &s);
+            assert!(database.evaluate(&u).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_diff() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Diff::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let u = Diff::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            s.insert(vec![4, 5].into(), &database).unwrap();
+            let u = Diff::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+
+        {
+            let database = Database::new();
+            let r = Singleton(42);
+            let s = Singleton(43);
+            let u = Diff::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Diff::new(&r, &s);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![0, 4, 2, 6].into(), &database).unwrap();
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 3]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let t = database.add_relation::<i32>("t");
+            let u1 = Diff::new(&r, &s);
+            let u2 = Diff::new(&u1, &t);
+
+            r.insert(vec![1, 2, 3, 4, 5].into(), &database).unwrap();
+            s.insert(vec![100, 4, 2].into(), &database).unwrap();
+            t.insert(vec![1, 2, 4, 100].into(), &database).unwrap();
+
+            let result = database.evaluate(&u2).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![3, 5]), result);
+        }
+        {
+            let mut database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Diff::new(&r, &s);
+            assert!(database.evaluate(&u).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_view() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let v = database.store_view(&r);
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let result = database.evaluate(&v).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let v_1 = database.store_view(&r);
+            let v_2 = database.store_view(&v_1);
+            let v_3 = database.store_view(&v_2);
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let result = database.evaluate(&v_3).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let view = database.store_view(&r_s);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(
+                Tuples::<(i32, i32)>::from(vec![(3, 5), (3, 6), (4, 5), (4, 6)]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let view = database.store_view(&r_s);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+
+            database.evaluate(&view).unwrap();
+            s.insert(vec![(1, 7)].into(), &database).unwrap();
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(
+                Tuples::<(i32, i32)>::from(vec![(3, 5), (3, 6), (3, 7), (4, 5), (4, 6), (4, 7)]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
+            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
+            let view = database.store_view(&r_s_t);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
+            let rs = Union::new(&r, &s);
+            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let view = database.store_view(&rs_t);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(
+                Tuples::<i32>::from(vec![82, 84, 120, 160, 200, 240]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
+            let rs = Intersect::new(&r, &s);
+            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let view = database.store_view(&rs_t);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 4), (3, 2), (2, 2)].into(), &database)
+                .unwrap();
+            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![82, 160]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<(i32, i32)>("r");
+            let s = database.add_relation::<(i32, i32)>("s");
+            let t = database.add_relation::<(i32, i32)>("t");
+            let rs = Diff::new(&r, &s);
+            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let view = database.store_view(&rs_t);
+
+            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+                .unwrap();
+            s.insert(vec![(1, 4), (3, 2), (1, 6)].into(), &database)
+                .unwrap();
+            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+                .unwrap();
+
+            let result = database.evaluate(&view).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![82, 120]), result);
+        }
+    }
+}

@@ -82,7 +82,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Database, Singleton};
+    use crate::Database;
 
     #[test]
     fn test_clone_join() {
@@ -96,94 +96,5 @@ mod tests {
             Tuples::<(i32, i32)>::from(vec![(10, 100)]),
             database.evaluate(&v).unwrap()
         );
-    }
-
-    #[test]
-    fn test_evaluate_join() {
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-
-            let result = database.evaluate(&join).unwrap();
-            assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
-                .unwrap();
-            let result = database.evaluate(&join).unwrap();
-            assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s1 = Singleton((1, 2));
-            let s2 = Singleton((3, 5));
-            let r_s1 = Join::new(&r, &s1, |_, &l, &r| (l, r));
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
-                .unwrap();
-            database.evaluate(&r_s1).unwrap(); // materialize the first view
-            let r_s1_s2 = Join::new(&r_s1, &s2, |_, &l, &r| (l, r));
-            let result = database.evaluate(&r_s1_s2).unwrap();
-            assert_eq!(Tuples::from(vec![(2, 5)]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
-                .unwrap();
-
-            let result = database.evaluate(&join).unwrap();
-            assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
-                .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
-                .unwrap();
-
-            let result = database.evaluate(&join).unwrap();
-            assert_eq!(
-                Tuples::<(i32, i32)>::from(vec![(3, 5), (3, 6), (4, 5), (4, 6)]),
-                result
-            );
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let t = database.add_relation::<(i32, i32)>("t");
-            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
-            let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
-
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
-                .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
-                .unwrap();
-            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
-                .unwrap();
-
-            let result = database.evaluate(&r_s_t).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
-        }
-        {
-            let mut database = Database::new();
-            let mut dummy = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = dummy.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            assert!(database.evaluate(&join).is_err());
-        }
     }
 }
