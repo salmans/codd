@@ -3,7 +3,7 @@ use crate::{Tuple, Tuples};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
-pub struct Union<T, L, R>
+pub struct Intersect<T, L, R>
 where
     T: Tuple,
     L: Expression<T>,
@@ -14,7 +14,7 @@ where
     _marker: PhantomData<T>,
 }
 
-impl<T, L, R> Union<T, L, R>
+impl<T, L, R> Intersect<T, L, R>
 where
     T: Tuple,
     L: Expression<T>,
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<T, L, R> Expression<T> for Union<T, L, R>
+impl<T, L, R> Expression<T> for Intersect<T, L, R>
 where
     T: Tuple,
     L: Expression<T>,
@@ -47,21 +47,21 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_union(&self);
+        visitor.visit_intersect(&self);
     }
 
     fn collect<C>(&self, collector: &C) -> anyhow::Result<Tuples<T>>
     where
         C: Collector,
     {
-        collector.collect_union(&self)
+        collector.collect_intersect(&self)
     }
 
     fn collect_list<C>(&self, collector: &C) -> anyhow::Result<Vec<Tuples<T>>>
     where
         C: ListCollector,
     {
-        collector.collect_union(&self)
+        collector.collect_intersect(&self)
     }
 }
 
@@ -71,26 +71,26 @@ mod tests {
     use crate::{Database, Singleton};
 
     #[test]
-    fn test_clone_union() {
+    fn test_clone_intersect() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
         let s = database.add_relation::<i32>("s");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();
-        s.insert(vec![4, 5].into(), &database).unwrap();
-        let u = Union::new(&r, &s).clone();
+        s.insert(vec![1, 4, 3, 5].into(), &database).unwrap();
+        let u = Intersect::new(&r, &s).clone();
         assert_eq!(
-            Tuples::<i32>::from(vec![1, 2, 3, 4, 5]),
+            Tuples::<i32>::from(vec![1, 3]),
             database.evaluate(&u).unwrap()
         );
     }
 
     #[test]
-    fn test_evaluate_union() {
+    fn test_evaluate_intersect() {
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            let u = Union::new(&r, &s);
+            let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![]), result);
@@ -100,66 +100,63 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
-            let u = Union::new(&r, &s);
+            let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
         }
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             s.insert(vec![4, 5].into(), &database).unwrap();
-            let u = Union::new(&r, &s);
+            let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![4, 5]), result);
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
         }
 
         {
             let database = Database::new();
             let r = Singleton(42);
             let s = Singleton(43);
-            let u = Union::new(&r, &s);
+            let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
         }
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            let u = Union::new(&r, &s);
+            let u = Intersect::new(&r, &s);
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![0, 4, 5, 6].into(), &database).unwrap();
+            s.insert(vec![0, 4, 2, 6].into(), &database).unwrap();
 
             let result = database.evaluate(&u).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![0, 1, 2, 3, 4, 5, 6]), result);
+            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
         }
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             let t = database.add_relation::<i32>("t");
-            let u1 = Union::new(&r, &s);
-            let u2 = Union::new(&u1, &t);
+            let u1 = Intersect::new(&r, &s);
+            let u2 = Intersect::new(&u1, &t);
 
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![100, 5, 200].into(), &database).unwrap();
-            t.insert(vec![40, 30, 4].into(), &database).unwrap();
+            s.insert(vec![100, 4, 2].into(), &database).unwrap();
+            t.insert(vec![40, 2, 4, 100].into(), &database).unwrap();
 
             let result = database.evaluate(&u2).unwrap();
-            assert_eq!(
-                Tuples::<i32>::from(vec![1, 2, 3, 4, 5, 30, 40, 100, 200]),
-                result
-            );
+            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
         }
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
             let r = dummy.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            let u = Union::new(&r, &s);
+            let u = Intersect::new(&r, &s);
             assert!(database.evaluate(&u).is_err());
         }
     }

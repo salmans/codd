@@ -1,3 +1,5 @@
+mod diff;
+mod intersect;
 mod join;
 mod project;
 mod relation;
@@ -9,6 +11,8 @@ mod view;
 use crate::{database::Tuples, Tuple};
 use anyhow::Result;
 
+pub use diff::Diff;
+pub use intersect::Intersect;
 pub use join::Join;
 pub use project::Project;
 pub use relation::Relation;
@@ -61,6 +65,24 @@ pub trait Visitor: Sized {
         R: Expression<T>,
     {
         walk_union(self, union);
+    }
+
+    fn visit_intersect<T, L, R>(&mut self, intersect: &Intersect<T, L, R>)
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
+    {
+        walk_intersect(self, intersect);
+    }
+
+    fn visit_diff<T, L, R>(&mut self, diff: &Diff<T, L, R>)
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
+    {
+        walk_diff(self, diff);
     }
 
     fn visit_project<S, T, E>(&mut self, project: &Project<S, T, E>)
@@ -129,6 +151,28 @@ where
     union.right().visit(visitor);
 }
 
+pub fn walk_intersect<T, L, R, V>(visitor: &mut V, intersect: &Intersect<T, L, R>)
+where
+    T: Tuple,
+    L: Expression<T>,
+    R: Expression<T>,
+    V: Visitor,
+{
+    intersect.left().visit(visitor);
+    intersect.right().visit(visitor);
+}
+
+pub fn walk_diff<T, L, R, V>(visitor: &mut V, diff: &Diff<T, L, R>)
+where
+    T: Tuple,
+    L: Expression<T>,
+    R: Expression<T>,
+    V: Visitor,
+{
+    diff.left().visit(visitor);
+    diff.right().visit(visitor);
+}
+
 pub fn walk_project<S, T, E, V>(visitor: &mut V, project: &Project<S, T, E>)
 where
     T: Tuple,
@@ -182,6 +226,18 @@ pub trait Collector {
         L: Expression<T>,
         R: Expression<T>;
 
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
+    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
     fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -221,6 +277,18 @@ pub trait ListCollector {
         E: Expression<T>;
 
     fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
+    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple,
         L: Expression<T>,

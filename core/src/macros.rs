@@ -59,6 +59,12 @@ macro_rules! relexp {
     (($($left:tt)*) union ($($right:tt)*)) => {
         $crate::relexp!(@union ($($left)*) ($($right)*))
     };
+    (($($left:tt)*) intersect ($($right:tt)*)) => {
+        $crate::relexp!(@intersect ($($left)*) ($($right)*))
+    };
+    (($($left:tt)*) minus ($($right:tt)*)) => {
+        $crate::relexp!(@minus ($($left)*) ($($right)*))
+    };
     (@select ($($rel_exp:tt)*) @proj -> [$proj:expr] @pred -> [$pred:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
         let sel_exp = $crate::Select::new(&rel_exp, $pred);
@@ -84,6 +90,16 @@ macro_rules! relexp {
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
         $crate::Union::new(&left, &right)
+    }};
+    (@intersect ($($left:tt)*) ($($right:tt)*)) => {{
+        let left = $crate::relexp!($($left)*);
+        let right = $crate::relexp!($($right)*);
+        $crate::Intersect::new(&left, &right)
+    }};
+    (@minus ($($left:tt)*) ($($right:tt)*)) => {{
+        let left = $crate::relexp!($($left)*);
+        let right = $crate::relexp!($($right)*);
+        $crate::Diff::new(&left, &right)
     }};
 }
 
@@ -151,6 +167,18 @@ mod tests {
             let exp = relalg! { select * from (([42]) union ([43]))};
             let result = database.evaluate(&exp).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![42, 43]), result);
+        }
+        {
+            let database = Database::new();
+            let exp = relalg! { select * from (([42]) intersect ([42]))};
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42]), result);
+        }
+        {
+            let database = Database::new();
+            let exp = relalg! { select * from (([42]) minus ([43]))};
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![42]), result);
         }
     }
 
@@ -263,6 +291,42 @@ mod tests {
                 ]),
                 result
             );
+        }
+        {
+            let mut database = Database::new();
+            let r = relalg! { create relation "r" [String] in database};
+            let s = relalg! { create relation "s" [String] in database};
+            let exp = relexp!((r) intersect (s));
+            relalg! (insert into (r) values [
+                "a".to_string(),
+                "b".to_string(),
+            ] in database)
+            .unwrap();
+            relalg! (insert into (s) values [
+                "x".to_string(), "b".to_string(), "y".to_string() 
+            ] in database)
+            .unwrap();
+
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(Tuples::from(vec!["b".to_string(),]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = relalg! { create relation "r" [String] in database};
+            let s = relalg! { create relation "s" [String] in database};
+            let exp = relexp!((r) minus (s));
+            relalg! (insert into (r) values [
+                "a".to_string(),
+                "b".to_string(),
+            ] in database)
+            .unwrap();
+            relalg! (insert into (s) values [
+                "x".to_string(), "b".to_string(), "y".to_string() 
+            ] in database)
+            .unwrap();
+
+            let result = database.evaluate(&exp).unwrap();
+            assert_eq!(Tuples::from(vec!["a".to_string(),]), result);
         }
         {
             let mut database = Database::new();
