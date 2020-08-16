@@ -80,43 +80,4 @@ mod tests {
             database.evaluate(&p).unwrap()
         );
     }
-
-    #[test]
-    fn test_evaluate_project() {
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let project = Project::new(&r, |t| t * 10);
-
-            let result = database.evaluate(&project).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let project = Project::new(&r, |t| t * 10);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-
-            let result = database.evaluate(&project).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![10, 20, 30, 40]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let p1 = Project::new(&r, |t| t * 10);
-            let p2 = Project::new(&p1, |t| t + 1);
-
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-
-            let result = database.evaluate(&p2).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![11, 21, 31, 41]), result);
-        }
-        {
-            let database = Database::new();
-            let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-            let project = Project::new(&r, |t| t + 1);
-            assert!(database.evaluate(&project).is_err());
-        }
-    }
 }

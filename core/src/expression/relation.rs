@@ -110,22 +110,4 @@ mod tests {
             database.evaluate(&r.clone()).unwrap()
         );
     }
-
-    #[test]
-    fn test_evaluate_relation() {
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
-            let result = database.evaluate(&r).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
-        }
-        {
-            let database = Database::new();
-            let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-
-            assert!(database.evaluate(&r).is_err());
-        }
-    }
 }

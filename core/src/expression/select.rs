@@ -67,7 +67,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Database, Singleton};
+    use crate::Database;
 
     #[test]
     fn test_clone_select() {
@@ -79,52 +79,5 @@ mod tests {
             Tuples::<i32>::from(vec![1, 3]),
             database.evaluate(&p).unwrap()
         );
-    }
-
-    #[test]
-    fn test_evaluate_select() {
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let project = Select::new(&r, |t| t % 2 == 1);
-
-            let result = database.evaluate(&project).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![]), result);
-        }
-        {
-            let database = Database::new();
-            let s = Singleton(42);
-            let select = Select::new(&s, |t| t % 2 == 0);
-
-            let result = database.evaluate(&select).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![42]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let select = Select::new(&r, |t| t % 2 == 0);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-
-            let result = database.evaluate(&select).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
-        }
-        {
-            let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let p1 = Select::new(&r, |t| t % 2 == 0);
-            let p2 = Select::new(&p1, |&t| t > 3);
-
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-
-            let result = database.evaluate(&p2).unwrap();
-            assert_eq!(Tuples::<i32>::from(vec![4]), result);
-        }
-        {
-            let database = Database::new();
-            let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-            let select = Select::new(&r, |&t| t > 1);
-            assert!(database.evaluate(&select).is_err());
-        }
     }
 }
