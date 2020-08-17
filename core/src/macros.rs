@@ -99,7 +99,7 @@ macro_rules! relexp {
     (@minus ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Diff::new(&left, &right)
+        $crate::Difference::new(&left, &right)
     }};
 }
 

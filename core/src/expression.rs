@@ -1,4 +1,4 @@
-mod diff;
+mod difference;
 mod intersect;
 mod join;
 mod project;
@@ -11,7 +11,7 @@ mod view;
 use crate::{database::Tuples, Tuple};
 use anyhow::Result;
 
-pub use diff::Diff;
+pub use difference::Difference;
 pub use intersect::Intersect;
 pub use join::Join;
 pub use project::Project;
@@ -76,13 +76,13 @@ pub trait Visitor: Sized {
         walk_intersect(self, intersect);
     }
 
-    fn visit_diff<T, L, R>(&mut self, diff: &Diff<T, L, R>)
+    fn visit_difference<T, L, R>(&mut self, difference: &Difference<T, L, R>)
     where
         T: Tuple,
         L: Expression<T>,
         R: Expression<T>,
     {
-        walk_diff(self, diff);
+        walk_difference(self, difference);
     }
 
     fn visit_project<S, T, E>(&mut self, project: &Project<S, T, E>)
@@ -162,15 +162,15 @@ where
     intersect.right().visit(visitor);
 }
 
-pub fn walk_diff<T, L, R, V>(visitor: &mut V, diff: &Diff<T, L, R>)
+pub fn walk_difference<T, L, R, V>(visitor: &mut V, difference: &Difference<T, L, R>)
 where
     T: Tuple,
     L: Expression<T>,
     R: Expression<T>,
     V: Visitor,
 {
-    diff.left().visit(visitor);
-    diff.right().visit(visitor);
+    difference.left().visit(visitor);
+    difference.right().visit(visitor);
 }
 
 pub fn walk_project<S, T, E, V>(visitor: &mut V, project: &Project<S, T, E>)
@@ -232,7 +232,7 @@ pub trait Collector {
         L: Expression<T>,
         R: Expression<T>;
 
-    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
     where
         T: Tuple,
         L: Expression<T>,
@@ -288,7 +288,10 @@ pub trait ListCollector {
         L: Expression<T>,
         R: Expression<T>;
 
-    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Vec<Tuples<T>>>
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple,
         L: Expression<T>,

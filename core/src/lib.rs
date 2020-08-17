@@ -5,7 +5,7 @@ mod tools;
 
 pub use database::{Database, Tuples};
 pub use expression::{
-    Diff, Expression, Intersect, Join, Project, Relation, Select, Singleton, Union, View,
+    Difference, Expression, Intersect, Join, Project, Relation, Select, Singleton, Union, View,
 };
 
 pub trait Tuple: Ord + Clone + 'static {}

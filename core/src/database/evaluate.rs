@@ -84,7 +84,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
     where
         T: Tuple,
         L: Expression<T>,
@@ -93,9 +93,9 @@ impl<'d> Collector for Incremental<'d> {
         let mut result = Vec::new();
         let incremental = Incremental(self.0);
 
-        let left_recent = diff.left().collect(self)?;
-        let left_stable = diff.left().collect_list(&incremental)?;
-        let right_stable = diff.right().collect_list(&incremental)?;
+        let left_recent = difference.left().collect(self)?;
+        let left_stable = difference.left().collect_list(&incremental)?;
+        let right_stable = difference.right().collect_list(&incremental)?;
 
         for batch in left_stable.iter() {
             diff_helper(&batch, &right_stable, &mut result)
@@ -254,15 +254,18 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Vec<Tuples<T>>>
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple,
         L: Expression<T>,
         R: Expression<T>,
     {
         let mut result = Vec::<Tuples<T>>::new();
-        let left = diff.left().collect_list(self)?;
-        let right = diff.right().collect_list(self)?;
+        let left = difference.left().collect_list(self)?;
+        let right = difference.right().collect_list(self)?;
 
         for batch in left.iter() {
             let mut tuples = Vec::new();
@@ -439,14 +442,14 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_diff<T, L, R>(&self, diff: &Diff<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
     where
         T: Tuple,
         L: Expression<T>,
         R: Expression<T>,
     {
         let mut elements = Elements::new();
-        diff.visit(&mut elements);
+        difference.visit(&mut elements);
 
         for r in elements.relations() {
             self.0.recalculate_relation(&r)?;
@@ -458,8 +461,8 @@ impl<'d> Collector for Evaluator<'d> {
 
         let incremental = Incremental(self.0);
 
-        let mut result = diff.collect(&incremental)?;
-        for batch in diff.collect_list(&incremental)? {
+        let mut result = difference.collect(&incremental)?;
+        for batch in difference.collect_list(&incremental)? {
             result = result.merge(batch);
         }
 
@@ -904,12 +907,12 @@ mod tests {
         }
     }
     #[test]
-    fn test_evaluate_diff() {
+    fn test_evaluate_difference() {
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            let u = Diff::new(&r, &s);
+            let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![]), result);
@@ -919,7 +922,7 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             r.insert(vec![1, 2, 3].into(), &database).unwrap();
-            let u = Diff::new(&r, &s);
+            let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
@@ -929,7 +932,7 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             s.insert(vec![4, 5].into(), &database).unwrap();
-            let u = Diff::new(&r, &s);
+            let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![]), result);
@@ -939,7 +942,7 @@ mod tests {
             let database = Database::new();
             let r = Singleton(42);
             let s = Singleton(43);
-            let u = Diff::new(&r, &s);
+            let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![42]), result);
@@ -948,7 +951,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            let u = Diff::new(&r, &s);
+            let u = Difference::new(&r, &s);
             r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
             s.insert(vec![0, 4, 2, 6].into(), &database).unwrap();
 
@@ -960,8 +963,8 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             let t = database.add_relation::<i32>("t");
-            let u1 = Diff::new(&r, &s);
-            let u2 = Diff::new(&u1, &t);
+            let u1 = Difference::new(&r, &s);
+            let u2 = Difference::new(&u1, &t);
 
             r.insert(vec![1, 2, 3, 4, 5].into(), &database).unwrap();
             s.insert(vec![100, 4, 2].into(), &database).unwrap();
@@ -975,7 +978,7 @@ mod tests {
             let mut dummy = Database::new();
             let r = dummy.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            let u = Diff::new(&r, &s);
+            let u = Difference::new(&r, &s);
             assert!(database.evaluate(&u).is_err());
         }
     }
@@ -1102,7 +1105,7 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
             let t = database.add_relation::<(i32, i32)>("t");
-            let rs = Diff::new(&r, &s);
+            let rs = Difference::new(&r, &s);
             let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
             let view = database.store_view(&rs_t);
 
