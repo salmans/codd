@@ -1,6 +1,7 @@
 mod difference;
 mod intersect;
 mod join;
+mod product;
 mod project;
 mod relation;
 mod select;
@@ -14,6 +15,7 @@ use anyhow::Result;
 pub use difference::Difference;
 pub use intersect::Intersect;
 pub use join::Join;
+pub use product::Product;
 pub use project::Project;
 pub use relation::Relation;
 pub use select::Select;
@@ -92,6 +94,17 @@ pub trait Visitor: Sized {
         E: Expression<S>,
     {
         walk_project(self, project);
+    }
+
+    fn visit_product<L, R, Left, Right, T>(&mut self, product: &Product<L, R, Left, Right, T>)
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>,
+    {
+        walk_product(self, product);
     }
 
     fn visit_join<K, L, R, Left, Right, T>(&mut self, join: &Join<K, L, R, Left, Right, T>)
@@ -183,6 +196,21 @@ where
     project.expression().visit(visitor);
 }
 
+pub fn walk_product<L, R, Left, Right, T, V>(
+    visitor: &mut V,
+    product: &Product<L, R, Left, Right, T>,
+) where
+    L: Tuple,
+    R: Tuple,
+    T: Tuple,
+    Left: Expression<L>,
+    Right: Expression<R>,
+    V: Visitor,
+{
+    product.left().visit(visitor);
+    product.right().visit(visitor);
+}
+
 pub fn walk_join<K, L, R, Left, Right, T, V>(visitor: &mut V, join: &Join<K, L, R, Left, Right, T>)
 where
     K: Tuple,
@@ -244,6 +272,17 @@ pub trait Collector {
         S: Tuple,
         E: Expression<S>;
 
+    fn collect_product<L, R, Left, Right, T>(
+        &self,
+        product: &Product<L, R, Left, Right, T>,
+    ) -> Result<Tuples<T>>
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>;
+
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
@@ -302,6 +341,17 @@ pub trait ListCollector {
         T: Tuple,
         S: Tuple,
         E: Expression<S>;
+
+    fn collect_product<L, R, Left, Right, T>(
+        &self,
+        product: &Product<L, R, Left, Right, T>,
+    ) -> Result<Vec<Tuples<T>>>
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>;
 
     fn collect_join<K, L, R, Left, Right, T>(
         &self,

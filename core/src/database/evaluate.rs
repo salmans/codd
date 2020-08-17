@@ -1,7 +1,7 @@
 use super::{elements::Elements, Database, Tuples};
 use crate::{
     expression::*,
-    tools::{diff_helper, intersect_helper, join_helper, project_helper},
+    tools::{diff_helper, intersect_helper, join_helper, product_helper, project_helper},
     Tuple,
 };
 use anyhow::Result;
@@ -115,6 +115,43 @@ impl<'d> Collector for Incremental<'d> {
         let recent = project.expression().collect(self)?;
         let mapper = &mut (*project.mapper().borrow_mut());
         project_helper(&recent, |t| result.push(mapper(t)));
+        Ok(result.into())
+    }
+
+    fn collect_product<L, R, Left, Right, T>(
+        &self,
+        product: &Product<L, R, Left, Right, T>,
+    ) -> Result<Tuples<T>>
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>,
+    {
+        let mut result = Vec::new();
+        let incremental = Incremental(self.0);
+
+        let left_recent = product.left().collect(self)?;
+        let right_recent = product.right().collect(self)?;
+
+        let left_stable = product.left().collect_list(&incremental)?;
+        let right_stable = product.right().collect_list(&incremental)?;
+
+        let mapper = &mut (*product.mapper().borrow_mut());
+
+        for batch in left_stable.iter() {
+            product_helper(&batch, &right_recent, |v1, v2| result.push(mapper(v1, v2)));
+        }
+
+        for batch in right_stable.iter() {
+            product_helper(&left_recent, &batch, |v1, v2| result.push(mapper(v1, v2)));
+        }
+
+        product_helper(&left_recent, &right_recent, |v1, v2| {
+            result.push(mapper(v1, v2))
+        });
+
         Ok(result.into())
     }
 
@@ -287,6 +324,34 @@ impl<'d> ListCollector for Incremental<'d> {
         for batch in stable.iter() {
             let mut tuples = Vec::new();
             project_helper(&batch, |t| tuples.push(mapper(t)));
+            result.push(tuples.into());
+        }
+        Ok(result)
+    }
+
+    fn collect_product<L, R, Left, Right, T>(
+        &self,
+        product: &Product<L, R, Left, Right, T>,
+    ) -> Result<Vec<Tuples<T>>>
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>,
+    {
+        let mut result = Vec::<Tuples<T>>::new();
+        let left = product.left().collect_list(self)?;
+        let right = product.right().collect_list(self)?;
+
+        let mapper = &mut (*product.mapper().borrow_mut());
+        for left_batch in left.iter() {
+            let mut tuples = Vec::new();
+            for right_batch in right.iter() {
+                product_helper(&left_batch, &right_batch, |v1, v2| {
+                    tuples.push(mapper(v1, v2))
+                });
+            }
             result.push(tuples.into());
         }
         Ok(result)
@@ -495,6 +560,38 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
+    fn collect_product<L, R, Left, Right, T>(
+        &self,
+        product: &Product<L, R, Left, Right, T>,
+    ) -> Result<Tuples<T>>
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>,
+    {
+        let mut elements = Elements::new();
+        product.visit(&mut elements);
+
+        for r in elements.relations() {
+            self.0.recalculate_relation(&r)?;
+        }
+
+        for r in elements.views() {
+            self.0.recalculate_view(&r)?;
+        }
+
+        let incremental = Incremental(self.0);
+
+        let mut result = product.collect(&incremental)?;
+        for batch in product.collect_list(&incremental)? {
+            result = result.merge(batch);
+        }
+
+        Ok(result)
+    }
+
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
@@ -661,6 +758,92 @@ mod tests {
             let r = dummy.add_relation::<i32>("r");
             let select = Select::new(&r, |&t| t > 1);
             assert!(database.evaluate(&select).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_product() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Product::new(&r, &s, |&l, &r| l + r);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            let u = Product::new(&r, &s, |&l, &r| l + r);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            s.insert(vec![4, 5].into(), &database).unwrap();
+            let u = Product::new(&r, &s, |&l, &r| l + r);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![]), result);
+        }
+
+        {
+            let database = Database::new();
+            let r = Singleton(42);
+            let s = Singleton(43);
+            let u = Product::new(&r, &s, |&l, &r| l + r);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::<i32>::from(vec![85]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Product::new(&r, &s, |&l, &r| l + r);
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![0, 4, 5, 6].into(), &database).unwrap();
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(
+                Tuples::<i32>::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let t = database.add_relation::<i32>("t");
+            let u1 = Product::new(&r, &s, |&l, &r| l + r);
+            let u2 = Product::new(&u1, &t, |&l, &r| l + r);
+
+            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            s.insert(vec![100, 5, 200].into(), &database).unwrap();
+            t.insert(vec![40, 30, 4].into(), &database).unwrap();
+
+            let result = database.evaluate(&u2).unwrap();
+            assert_eq!(
+                Tuples::<i32>::from(vec![
+                    10, 11, 12, 13, 36, 37, 38, 39, 46, 47, 48, 49, 105, 106, 107, 108, 131, 132,
+                    133, 134, 141, 142, 143, 144, 205, 206, 207, 208, 231, 232, 233, 234, 241, 242,
+                    243, 244
+                ]),
+                result
+            );
+        }
+        {
+            let mut database = Database::new();
+            let mut dummy = Database::new();
+            let r = dummy.add_relation::<i32>("r");
+            let s = database.add_relation::<i32>("s");
+            let u = Product::new(&r, &s, |&l, &r| l + r);
+            assert!(database.evaluate(&u).is_err());
         }
     }
     #[test]

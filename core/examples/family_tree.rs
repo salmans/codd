@@ -11,7 +11,7 @@ struct Person {
 
 fn main() -> Result<()> {
     let mut family = Database::new();
-    let person = relalg! { create relation "Person" [Person] in family };
+    let person = relalg! { create relation "Person":[Person] in family };
     relalg! (
         insert into (person) values [
             Person {
