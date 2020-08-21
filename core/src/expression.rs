@@ -1,4 +1,6 @@
 mod difference;
+mod empty;
+mod full;
 mod intersect;
 mod join;
 mod product;
@@ -13,6 +15,8 @@ use crate::{database::Tuples, Tuple};
 use anyhow::Result;
 
 pub use difference::Difference;
+pub use empty::Empty;
+pub use full::Full;
 pub use intersect::Intersect;
 pub use join::Join;
 pub use product::Product;
@@ -38,6 +42,20 @@ pub trait Expression<T: Tuple>: Clone {
 }
 
 pub trait Visitor: Sized {
+    fn visit_full<T>(&mut self, full: &Full<T>)
+    where
+        T: Tuple,
+    {
+        walk_full(self, full)
+    }
+
+    fn visit_empty<T>(&mut self, empty: &Empty<T>)
+    where
+        T: Tuple,
+    {
+        walk_empty(self, empty)
+    }
+
     fn visit_singleton<T>(&mut self, singleton: &Singleton<T>)
     where
         T: Tuple,
@@ -126,6 +144,22 @@ pub trait Visitor: Sized {
     {
         walk_view(self, view);
     }
+}
+
+pub fn walk_full<T, V>(_: &mut V, _: &Full<T>)
+where
+    T: Tuple,
+    V: Visitor,
+{
+    // nothing to do
+}
+
+pub fn walk_empty<T, V>(_: &mut V, _: &Empty<T>)
+where
+    T: Tuple,
+    V: Visitor,
+{
+    // nothing to do
 }
 
 pub fn walk_singlenton<T, V>(_: &mut V, _: &Singleton<T>)
@@ -235,6 +269,14 @@ where
 }
 
 pub trait Collector {
+    fn collect_full<T>(&self, full: &Full<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple;
+
+    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple;
+
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
     where
         T: Tuple;
@@ -302,6 +344,14 @@ pub trait Collector {
 }
 
 pub trait ListCollector {
+    fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple;
+
+    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple;
+
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple;

@@ -71,7 +71,7 @@ mod tests {
     use crate::Database;
 
     #[test]
-    fn test_clone_difference() {
+    fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
         let s = database.add_relation::<i32>("s");

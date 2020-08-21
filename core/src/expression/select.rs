@@ -70,7 +70,7 @@ mod tests {
     use crate::Database;
 
     #[test]
-    fn test_clone_select() {
+    fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();

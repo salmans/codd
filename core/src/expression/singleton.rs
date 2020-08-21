@@ -37,12 +37,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_singleton() {
+    fn test_new() {
         assert_eq!(42, Singleton::<i32>(42).0);
     }
 
     #[test]
-    fn test_clone_singleton() {
+    fn test_clone() {
         let s = Singleton(42);
         assert_eq!(42, s.clone().0);
     }

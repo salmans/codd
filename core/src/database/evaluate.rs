@@ -4,11 +4,25 @@ use crate::{
     tools::{diff_helper, intersect_helper, join_helper, product_helper, project_helper},
     Tuple,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 pub(crate) struct Incremental<'d>(pub &'d Database);
 
 impl<'d> Collector for Incremental<'d> {
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        bail!("cannot evaluate Full")
+    }
+
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
     fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -208,6 +222,20 @@ impl<'d> Collector for Incremental<'d> {
 }
 
 impl<'d> ListCollector for Incremental<'d> {
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+    {
+        bail!("cannot evaluate Full")
+    }
+
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Vec<Tuples<T>>>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
     where
         T: Tuple,
@@ -403,6 +431,20 @@ impl<'d> ListCollector for Incremental<'d> {
 pub(crate) struct Evaluator<'d>(pub &'d Database);
 
 impl<'d> Collector for Evaluator<'d> {
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        bail!("cannot evaluate Full")
+    }
+
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
     where
         T: Tuple,
@@ -650,6 +692,23 @@ impl<'d> Collector for Evaluator<'d> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_evaluate_full() {
+        {
+            let database = Database::new();
+            let s = Full::<i32>::new();
+            assert!(database.evaluate(&s).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_empty() {
+        {
+            let database = Database::new();
+            let s = Empty::<i32>::new();
+            let result = database.evaluate(&s).unwrap();
+            assert_eq!(Tuples::from(vec![]), result);
+        }
+    }
     #[test]
     fn test_evaluate_singleton() {
         {

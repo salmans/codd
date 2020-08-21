@@ -64,12 +64,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_relation() {
+    fn test_new() {
         assert_eq!("a".to_string(), Relation::<i32>::new("a").name);
     }
 
     #[test]
-    fn test_insert_relation() {
+    fn test_insert() {
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clone_relation() {
+    fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
         r.insert(vec![1, 2, 3].into(), &database).unwrap();

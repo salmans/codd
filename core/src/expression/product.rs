@@ -75,3 +75,23 @@ where
         collector.collect_product(&self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Database;
+
+    #[test]
+    fn test_clone() {
+        let mut database = Database::new();
+        let r = database.add_relation::<i32>("r");
+        let s = database.add_relation::<i32>("s");
+        r.insert(vec![1, 10].into(), &database).unwrap();
+        s.insert(vec![1, 100].into(), &database).unwrap();
+        let v = Product::new(&r, &s, |&l, &r| l + r).clone();
+        assert_eq!(
+            Tuples::from(vec![2, 11, 101, 110]),
+            database.evaluate(&v).unwrap()
+        );
+    }
+}
