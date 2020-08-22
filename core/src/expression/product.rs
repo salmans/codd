@@ -1,6 +1,5 @@
 use super::{Expression, Visitor};
-use crate::{database::Tuples, Tuple};
-use anyhow::Result;
+use crate::{database::Tuples, expression::Error, Tuple};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone)]
@@ -61,17 +60,37 @@ where
         visitor.visit_product(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_product(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {
         collector.collect_product(&self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Database;
+
+    #[test]
+    fn test_clone() {
+        let mut database = Database::new();
+        let r = database.add_relation::<i32>("r");
+        let s = database.add_relation::<i32>("s");
+        database.insert(&r, vec![1, 10].into()).unwrap();
+        database.insert(&s, vec![1, 100].into()).unwrap();
+        let v = Product::new(&r, &s, |&l, &r| l + r).clone();
+        assert_eq!(
+            Tuples::from(vec![2, 11, 101, 110]),
+            database.evaluate(&v).unwrap()
+        );
     }
 }

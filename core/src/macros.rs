@@ -29,12 +29,12 @@ macro_rules! relalg {
     };
     (insert into ($relation:ident) values [$($value:expr),*] in $db:ident) => {
         {
-            $relation.insert(vec![$($value,)*].into(), &$db)
+            $db.insert(&$relation, vec![$($value,)*].into())
         }
     };
     (insert into ($relation:ident) values [$($value:expr),+,] in $db:ident) => {
         {
-            $relation.insert(vec![$($value,)+].into(), &$db)
+            $db.insert(&$relation, vec![$($value,)+].into())
         }
     };
 }
@@ -121,7 +121,7 @@ mod tests {
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database};
-            assert!(database.relation_instance(&r).is_ok());
+            assert!(database.evaluate(&r).is_ok());
         }
         {
             let mut database = Database::new();
@@ -162,13 +162,13 @@ mod tests {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database};
             let v = relalg! { create view as (select * from (r)) in database};
-            assert!(database.view_instance(&v).is_ok());
+            assert!(database.evaluate(&v).is_ok());
         }
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database};
             let v = relalg! { create view as (select [|&x| x > 0] from (r)) in database};
-            assert!(database.view_instance(&v).is_ok());
+            assert!(database.evaluate(&v).is_ok());
         }
         {
             let database = Database::new();

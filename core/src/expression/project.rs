@@ -1,6 +1,5 @@
 use super::{Expression, Visitor};
-use crate::{database::Tuples, Tuple};
-use anyhow::Result;
+use crate::{database::Tuples, expression::Error, Tuple};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone)]
@@ -49,14 +48,14 @@ where
         visitor.visit_project(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_project(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {
@@ -70,10 +69,10 @@ mod tests {
     use crate::Database;
 
     #[test]
-    fn test_clone_project() {
+    fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
-        r.insert(vec![1, 2, 3].into(), &database).unwrap();
+        database.insert(&r, vec![1, 2, 3].into()).unwrap();
         let p = Project::new(&r, |&t| t * 10).clone();
         assert_eq!(
             Tuples::<i32>::from(vec![10, 20, 30]),

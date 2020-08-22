@@ -1,22 +1,38 @@
-use super::{elements::Elements, Database, Tuples};
-use crate::{
-    expression::*,
-    tools::{diff_helper, intersect_helper, join_helper, product_helper, project_helper},
-    Tuple,
+use super::{
+    elements::Elements,
+    helpers::{diff_helper, intersect_helper, join_helper, product_helper, project_helper},
+    Database, Tuples,
 };
-use anyhow::Result;
+use crate::{expression::*, Error, Tuple};
 
-pub(crate) struct Incremental<'d>(pub &'d Database);
+pub(super) struct Incremental<'d>(pub &'d Database);
 
 impl<'d> Collector for Incremental<'d> {
-    fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>>
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>, Error>
+    where
+        T: Tuple,
+    {
+        Err(Error::UnsupportedExpression {
+            name: "Full".to_string(),
+            operation: "Evaluate".to_string(),
+        })
+    }
+
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
         Ok(Vec::new().into())
     }
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
+    fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>, Error>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
@@ -24,7 +40,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(table.recent.borrow().clone())
     }
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -40,7 +56,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -57,7 +73,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>>
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -84,7 +100,10 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -105,7 +124,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -121,7 +140,7 @@ impl<'d> Collector for Incremental<'d> {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -158,7 +177,7 @@ impl<'d> Collector for Incremental<'d> {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -197,7 +216,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -208,14 +227,31 @@ impl<'d> Collector for Incremental<'d> {
 }
 
 impl<'d> ListCollector for Incremental<'d> {
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+    {
+        Err(Error::UnsupportedExpression {
+            name: "Full".to_string(),
+            operation: "Evaluate".to_string(),
+        })
+    }
+
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
     {
         Ok(vec![vec![singleton.0.clone()].into()])
     }
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
     {
@@ -227,7 +263,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -247,7 +283,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -271,7 +307,10 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Vec<Tuples<T>>>
+    fn collect_intersect<T, L, R>(
+        &self,
+        intersect: &Intersect<T, L, R>,
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -294,7 +333,7 @@ impl<'d> ListCollector for Incremental<'d> {
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -312,7 +351,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -332,7 +371,7 @@ impl<'d> ListCollector for Incremental<'d> {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -360,7 +399,7 @@ impl<'d> ListCollector for Incremental<'d> {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -386,7 +425,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -400,17 +439,34 @@ impl<'d> ListCollector for Incremental<'d> {
     }
 }
 
-pub(crate) struct Evaluator<'d>(pub &'d Database);
+pub(super) struct Evaluator<'d>(pub &'d Database);
 
 impl<'d> Collector for Evaluator<'d> {
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>, Error>
+    where
+        T: Tuple,
+    {
+        Err(Error::UnsupportedExpression {
+            name: "Full".to_string(),
+            operation: "Evaluate".to_string(),
+        })
+    }
+
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>, Error>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
         Ok(vec![singleton.0.clone()].into())
     }
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
@@ -429,7 +485,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -454,7 +510,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -480,7 +536,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>>
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -507,7 +563,10 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -534,7 +593,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -563,7 +622,7 @@ impl<'d> Collector for Evaluator<'d> {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -595,7 +654,7 @@ impl<'d> Collector for Evaluator<'d> {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -625,7 +684,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -651,6 +710,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_evaluate_full() {
+        {
+            let database = Database::new();
+            let s = Full::<i32>::new();
+            assert!(database.evaluate(&s).is_err());
+        }
+    }
+    #[test]
+    fn test_evaluate_empty() {
+        {
+            let database = Database::new();
+            let s = Empty::<i32>::new();
+            let result = database.evaluate(&s).unwrap();
+            assert_eq!(Tuples::from(vec![]), result);
+        }
+    }
+    #[test]
     fn test_evaluate_singleton() {
         {
             let database = Database::new();
@@ -664,7 +740,7 @@ mod tests {
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let result = database.evaluate(&r).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
         }
@@ -690,7 +766,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let project = Project::new(&r, |t| t * 10);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
 
             let result = database.evaluate(&project).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![10, 20, 30, 40]), result);
@@ -701,7 +777,7 @@ mod tests {
             let p1 = Project::new(&r, |t| t * 10);
             let p2 = Project::new(&p1, |t| t + 1);
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
 
             let result = database.evaluate(&p2).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![11, 21, 31, 41]), result);
@@ -736,7 +812,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let select = Select::new(&r, |t| t % 2 == 0);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
 
             let result = database.evaluate(&select).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
@@ -747,7 +823,7 @@ mod tests {
             let p1 = Select::new(&r, |t| t % 2 == 0);
             let p2 = Select::new(&p1, |&t| t > 3);
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
 
             let result = database.evaluate(&p2).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![4]), result);
@@ -775,7 +851,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
 
             let result = database.evaluate(&u).unwrap();
@@ -785,7 +861,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            s.insert(vec![4, 5].into(), &database).unwrap();
+            database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
 
             let result = database.evaluate(&u).unwrap();
@@ -806,8 +882,8 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             let u = Product::new(&r, &s, |&l, &r| l + r);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![0, 4, 5, 6].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![0, 4, 5, 6].into()).unwrap();
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(
@@ -823,9 +899,9 @@ mod tests {
             let u1 = Product::new(&r, &s, |&l, &r| l + r);
             let u2 = Product::new(&u1, &t, |&l, &r| l + r);
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![100, 5, 200].into(), &database).unwrap();
-            t.insert(vec![40, 30, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![100, 5, 200].into()).unwrap();
+            database.insert(&t, vec![40, 30, 4].into()).unwrap();
 
             let result = database.evaluate(&u2).unwrap();
             assert_eq!(
@@ -862,7 +938,8 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
             let result = database.evaluate(&join).unwrap();
             assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
@@ -873,7 +950,8 @@ mod tests {
             let s1 = Singleton((1, 2));
             let s2 = Singleton((3, 5));
             let r_s1 = Join::new(&r, &s1, |_, &l, &r| (l, r));
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
             database.evaluate(&r_s1).unwrap(); // materialize the first view
             let r_s1_s2 = Join::new(&r_s1, &s2, |_, &l, &r| (l, r));
@@ -885,7 +963,8 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
 
             let result = database.evaluate(&join).unwrap();
@@ -896,9 +975,11 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
             let join = Join::new(&r, &s, |_, &l, &r| (l, r));
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
 
             let result = database.evaluate(&join).unwrap();
@@ -915,11 +996,14 @@ mod tests {
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
             let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
-            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+            database
+                .insert(&t, vec![(1, 40), (2, 41), (3, 42), (4, 43)].into())
                 .unwrap();
 
             let result = database.evaluate(&r_s_t).unwrap();
@@ -949,7 +1033,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Union::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -959,7 +1043,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            s.insert(vec![4, 5].into(), &database).unwrap();
+            database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Union::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -980,8 +1064,8 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             let u = Union::new(&r, &s);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![0, 4, 5, 6].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![0, 4, 5, 6].into()).unwrap();
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![0, 1, 2, 3, 4, 5, 6]), result);
@@ -994,9 +1078,9 @@ mod tests {
             let u1 = Union::new(&r, &s);
             let u2 = Union::new(&u1, &t);
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![100, 5, 200].into(), &database).unwrap();
-            t.insert(vec![40, 30, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![100, 5, 200].into()).unwrap();
+            database.insert(&t, vec![40, 30, 4].into()).unwrap();
 
             let result = database.evaluate(&u2).unwrap();
             assert_eq!(
@@ -1028,7 +1112,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1038,7 +1122,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            s.insert(vec![4, 5].into(), &database).unwrap();
+            database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1059,8 +1143,8 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             let u = Intersect::new(&r, &s);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![0, 4, 2, 6].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![0, 4, 2, 6].into()).unwrap();
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
@@ -1073,9 +1157,9 @@ mod tests {
             let u1 = Intersect::new(&r, &s);
             let u2 = Intersect::new(&u1, &t);
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![100, 4, 2].into(), &database).unwrap();
-            t.insert(vec![40, 2, 4, 100].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![100, 4, 2].into()).unwrap();
+            database.insert(&t, vec![40, 2, 4, 100].into()).unwrap();
 
             let result = database.evaluate(&u2).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![2, 4]), result);
@@ -1104,7 +1188,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1114,7 +1198,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
-            s.insert(vec![4, 5].into(), &database).unwrap();
+            database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1135,8 +1219,8 @@ mod tests {
             let r = database.add_relation::<i32>("r");
             let s = database.add_relation::<i32>("s");
             let u = Difference::new(&r, &s);
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
-            s.insert(vec![0, 4, 2, 6].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+            database.insert(&s, vec![0, 4, 2, 6].into()).unwrap();
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 3]), result);
@@ -1149,9 +1233,9 @@ mod tests {
             let u1 = Difference::new(&r, &s);
             let u2 = Difference::new(&u1, &t);
 
-            r.insert(vec![1, 2, 3, 4, 5].into(), &database).unwrap();
-            s.insert(vec![100, 4, 2].into(), &database).unwrap();
-            t.insert(vec![1, 2, 4, 100].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4, 5].into()).unwrap();
+            database.insert(&s, vec![100, 4, 2].into()).unwrap();
+            database.insert(&t, vec![1, 2, 4, 100].into()).unwrap();
 
             let result = database.evaluate(&u2).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![3, 5]), result);
@@ -1171,7 +1255,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r");
             let v = database.store_view(&r);
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let result = database.evaluate(&v).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
         }
@@ -1181,7 +1265,7 @@ mod tests {
             let v_1 = database.store_view(&r);
             let v_2 = database.store_view(&v_1);
             let v_3 = database.store_view(&v_2);
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let result = database.evaluate(&v_3).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
         }
@@ -1192,9 +1276,11 @@ mod tests {
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
             let view = database.store_view(&r_s);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
 
             let result = database.evaluate(&view).unwrap();
@@ -1210,13 +1296,15 @@ mod tests {
             let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
             let view = database.store_view(&r_s);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
 
             database.evaluate(&view).unwrap();
-            s.insert(vec![(1, 7)].into(), &database).unwrap();
+            database.insert(&s, vec![(1, 7)].into()).unwrap();
             let result = database.evaluate(&view).unwrap();
             assert_eq!(
                 Tuples::<(i32, i32)>::from(vec![(3, 5), (3, 6), (3, 7), (4, 5), (4, 6), (4, 7)]),
@@ -1232,11 +1320,14 @@ mod tests {
             let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
             let view = database.store_view(&r_s_t);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
-            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+            database
+                .insert(&t, vec![(1, 40), (2, 41), (3, 42), (4, 43)].into())
                 .unwrap();
 
             let result = database.evaluate(&view).unwrap();
@@ -1251,11 +1342,14 @@ mod tests {
             let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
             let view = database.store_view(&rs_t);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 5), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
-            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+            database
+                .insert(&t, vec![(1, 40), (2, 41), (3, 42), (4, 43)].into())
                 .unwrap();
 
             let result = database.evaluate(&view).unwrap();
@@ -1273,11 +1367,14 @@ mod tests {
             let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
             let view = database.store_view(&rs_t);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 4), (3, 2), (2, 2)].into(), &database)
+            database
+                .insert(&s, vec![(1, 4), (3, 2), (2, 2)].into())
                 .unwrap();
-            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+            database
+                .insert(&t, vec![(1, 40), (2, 41), (3, 42), (4, 43)].into())
                 .unwrap();
 
             let result = database.evaluate(&view).unwrap();
@@ -1292,11 +1389,14 @@ mod tests {
             let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
             let view = database.store_view(&rs_t);
 
-            r.insert(vec![(1, 4), (2, 2), (1, 3)].into(), &database)
+            database
+                .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
-            s.insert(vec![(1, 4), (3, 2), (1, 6)].into(), &database)
+            database
+                .insert(&s, vec![(1, 4), (3, 2), (1, 6)].into())
                 .unwrap();
-            t.insert(vec![(1, 40), (2, 41), (3, 42), (4, 43)].into(), &database)
+            database
+                .insert(&t, vec![(1, 40), (2, 41), (3, 42), (4, 43)].into())
                 .unwrap();
 
             let result = database.evaluate(&view).unwrap();

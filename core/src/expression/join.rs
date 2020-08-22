@@ -1,6 +1,5 @@
 use super::{Expression, Visitor};
-use crate::{database::Tuples, Tuple};
-use anyhow::Result;
+use crate::{database::Tuples, expression::Error, Tuple};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone)]
@@ -64,14 +63,14 @@ where
         visitor.visit_join(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_join(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {
@@ -85,12 +84,12 @@ mod tests {
     use crate::Database;
 
     #[test]
-    fn test_clone_join() {
+    fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<(i32, i32)>("r");
         let s = database.add_relation::<(i32, i32)>("s");
-        r.insert(vec![(1, 10)].into(), &database).unwrap();
-        s.insert(vec![(1, 100)].into(), &database).unwrap();
+        database.insert(&r, vec![(1, 10)].into()).unwrap();
+        database.insert(&s, vec![(1, 100)].into()).unwrap();
         let v = Join::new(&r, &s, |_, &l, &r| (l, r)).clone();
         assert_eq!(
             Tuples::<(i32, i32)>::from(vec![(10, 100)]),
