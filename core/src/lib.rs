@@ -1,7 +1,6 @@
 mod database;
 mod expression;
 mod macros;
-mod tools;
 
 pub use database::{Database, Tuples};
 pub use expression::{

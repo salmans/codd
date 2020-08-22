@@ -1,12 +1,13 @@
 pub mod elements;
 mod evaluate;
+mod helpers;
 
 use crate::{
     expression::{Expression, Relation, View},
-    tools::gallop,
     Tuple,
 };
 use anyhow::{anyhow, Result};
+use helpers::gallop;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -49,14 +50,14 @@ trait InstanceExt {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Instance<T: Tuple> {
-    pub(crate) stable: Rc<RefCell<Vec<Tuples<T>>>>,
-    pub(crate) recent: Rc<RefCell<Tuples<T>>>,
-    pub(crate) to_add: Rc<RefCell<Vec<Tuples<T>>>>,
+struct Instance<T: Tuple> {
+    stable: Rc<RefCell<Vec<Tuples<T>>>>,
+    recent: Rc<RefCell<Tuples<T>>>,
+    to_add: Rc<RefCell<Vec<Tuples<T>>>>,
 }
 
 impl<T: Tuple> Instance<T> {
-    pub(crate) fn insert(&self, tuples: Tuples<T>) {
+    fn insert(&self, tuples: Tuples<T>) {
         if !tuples.is_empty() {
             self.to_add.borrow_mut().push(tuples);
         }
@@ -121,10 +122,10 @@ impl<T: Tuple> InstanceExt for Instance<T> {
     }
 }
 
-pub type RelationRef = String;
+type RelationRef = String;
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
-pub struct ViewRef(i32);
+pub(crate) struct ViewRef(i32);
 
 trait MaterializedViewExt {
     fn as_any(&self) -> &dyn Any;
@@ -285,10 +286,13 @@ impl Database {
         Relation::new(name)
     }
 
-    pub(crate) fn relation_instance<T: Tuple>(
-        &self,
-        relation: &Relation<T>,
-    ) -> Result<&Instance<T>> {
+    pub fn insert<T: Tuple>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<()> {
+        let instance = self.relation_instance(&relation)?;
+        instance.insert(tuples);
+        Ok(())
+    }
+
+    fn relation_instance<T: Tuple>(&self, relation: &Relation<T>) -> Result<&Instance<T>> {
         let result = self
             .relations
             .get(&relation.name)
@@ -337,7 +341,7 @@ impl Database {
         View::new(reference)
     }
 
-    pub(crate) fn view_instance<T, E>(&self, view: &View<T, E>) -> Result<&Instance<T>>
+    fn view_instance<T, E>(&self, view: &View<T, E>) -> Result<&Instance<T>>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -350,7 +354,7 @@ impl Database {
         Ok(&result.instance)
     }
 
-    pub fn recalculate_view(&self, view_ref: &ViewRef) -> Result<()> {
+    fn recalculate_view(&self, view_ref: &ViewRef) -> Result<()> {
         if let Some(entry) = self.views.get(view_ref) {
             for r in entry.up_relation_refs.iter() {
                 self.recalculate_relation(r)?;
@@ -370,7 +374,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn recalculate_relation(&self, relation_ref: &RelationRef) -> Result<()> {
+    fn recalculate_relation(&self, relation_ref: &RelationRef) -> Result<()> {
         if let Some(entry) = self.relations.get(relation_ref) {
             while entry.instance.changed() {
                 for r in entry.down_refs.iter() {
@@ -460,6 +464,38 @@ mod tests {
                 Vec::<Tuples<i32>>::from(vec![vec![4, 5].into()]),
                 *relation.to_add.borrow(),
             );
+        }
+    }
+
+    #[test]
+    fn test_insert() {
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
+            assert_eq!(
+                Tuples::<i32>::from(vec![1, 2, 3]),
+                database.relation_instance(&r).unwrap().to_add.borrow()[0]
+            );
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r");
+            assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
+            assert!(database.insert(&r, vec![1, 4].into()).is_ok());
+            assert_eq!(
+                Tuples::<i32>::from(vec![1, 2, 3]),
+                database.relation_instance(&r).unwrap().to_add.borrow()[0]
+            );
+            assert_eq!(
+                Tuples::<i32>::from(vec![1, 4]),
+                database.relation_instance(&r).unwrap().to_add.borrow()[1]
+            );
+        }
+        {
+            let database = Database::new();
+            let r = Database::new().add_relation("r"); // dummy database
+            assert!(database.insert(&r, vec![1, 2, 3].into()).is_err());
         }
     }
 
@@ -716,7 +752,7 @@ mod tests {
     fn test_relation_changed() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
-        r.insert(vec![1, 2, 3].into(), &database).unwrap();
+        database.insert(&r, vec![1, 2, 3].into()).unwrap();
         let r_inst = database.relation_instance(&r).unwrap();
 
         assert_eq!(
@@ -759,7 +795,7 @@ mod tests {
             let r_inst = database.relation_instance(&r).unwrap();
             let v_inst = database.view_instance(&v).unwrap();
 
-            r.insert(vec![1, 2, 3].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
             r_inst.changed();
 
             database
@@ -808,7 +844,7 @@ mod tests {
             let r_inst = database.relation_instance(&r).unwrap();
             let v_inst = database.view_instance(&v).unwrap();
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
             r_inst.changed();
 
             database
@@ -857,7 +893,7 @@ mod tests {
             let r_inst = database.relation_instance(&r).unwrap();
             let v_inst = database.view_instance(&v).unwrap();
 
-            r.insert(vec![1, 2, 3, 4].into(), &database).unwrap();
+            database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
             r_inst.changed();
 
             database
@@ -908,9 +944,11 @@ mod tests {
             let s_inst = database.relation_instance(&s).unwrap();
             let v_inst = database.view_instance(&v).unwrap();
 
-            r.insert(vec![(1, 2), (2, 3), (3, 4)].into(), &database)
+            database
+                .insert(&r, vec![(1, 2), (2, 3), (3, 4)].into())
                 .unwrap();
-            s.insert(vec![(2, 3), (3, 4), (4, 5)].into(), &database)
+            database
+                .insert(&s, vec![(2, 3), (3, 4), (4, 5)].into())
                 .unwrap();
             r_inst.changed();
             s_inst.changed();

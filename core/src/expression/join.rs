@@ -89,8 +89,8 @@ mod tests {
         let mut database = Database::new();
         let r = database.add_relation::<(i32, i32)>("r");
         let s = database.add_relation::<(i32, i32)>("s");
-        r.insert(vec![(1, 10)].into(), &database).unwrap();
-        s.insert(vec![(1, 100)].into(), &database).unwrap();
+        database.insert(&r, vec![(1, 10)].into()).unwrap();
+        database.insert(&s, vec![(1, 100)].into()).unwrap();
         let v = Join::new(&r, &s, |_, &l, &r| (l, r)).clone();
         assert_eq!(
             Tuples::<(i32, i32)>::from(vec![(10, 100)]),

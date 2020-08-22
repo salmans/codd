@@ -73,7 +73,7 @@ mod tests {
     fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
-        r.insert(vec![1, 2, 3].into(), &database).unwrap();
+        database.insert(&r, vec![1, 2, 3].into()).unwrap();
         let p = Project::new(&r, |&t| t * 10).clone();
         assert_eq!(
             Tuples::<i32>::from(vec![10, 20, 30]),

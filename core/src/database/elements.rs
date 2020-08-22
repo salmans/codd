@@ -7,18 +7,18 @@ pub struct Elements {
 }
 
 impl Elements {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             relations: Vec::new(),
             views: Vec::new(),
         }
     }
 
-    pub fn relations(&self) -> &Vec<RelationRef> {
+    pub(super) fn relations(&self) -> &Vec<RelationRef> {
         &self.relations
     }
 
-    pub fn views(&self) -> &Vec<ViewRef> {
+    pub(super) fn views(&self) -> &Vec<ViewRef> {
         &self.views
     }
 }

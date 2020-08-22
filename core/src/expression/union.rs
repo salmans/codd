@@ -75,8 +75,8 @@ mod tests {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r");
         let s = database.add_relation::<i32>("s");
-        r.insert(vec![1, 2, 3].into(), &database).unwrap();
-        s.insert(vec![4, 5].into(), &database).unwrap();
+        database.insert(&r, vec![1, 2, 3].into()).unwrap();
+        database.insert(&s, vec![4, 5].into()).unwrap();
         let u = Union::new(&r, &s).clone();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 2, 3, 4, 5]),
