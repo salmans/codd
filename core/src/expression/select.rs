@@ -1,6 +1,5 @@
 use super::{Expression, Visitor};
-use crate::{Tuple, Tuples};
-use anyhow::Result;
+use crate::{expression::Error, Tuple, Tuples};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone)]
@@ -49,14 +48,14 @@ where
         visitor.visit_select(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_select(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {

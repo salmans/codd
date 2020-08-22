@@ -3,34 +3,36 @@ use super::{
     helpers::{diff_helper, intersect_helper, join_helper, product_helper, project_helper},
     Database, Tuples,
 };
-use crate::{expression::*, Tuple};
-use anyhow::{bail, Result};
+use crate::{expression::*, Error, Tuple};
 
 pub(super) struct Incremental<'d>(pub &'d Database);
 
 impl<'d> Collector for Incremental<'d> {
-    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>>
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
-        bail!("cannot evaluate Full")
+        Err(Error::UnsupportedExpression {
+            name: "Full".to_string(),
+            operation: "Evaluate".to_string(),
+        })
     }
 
-    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>>
-    where
-        T: Tuple,
-    {
-        Ok(Vec::new().into())
-    }
-
-    fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>>
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
         Ok(Vec::new().into())
     }
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
+    fn collect_singleton<T>(&self, _: &Singleton<T>) -> Result<Tuples<T>, Error>
+    where
+        T: Tuple,
+    {
+        Ok(Vec::new().into())
+    }
+
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
@@ -38,7 +40,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(table.recent.borrow().clone())
     }
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -54,7 +56,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -71,7 +73,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>>
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -98,7 +100,10 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -119,7 +124,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -135,7 +140,7 @@ impl<'d> Collector for Incremental<'d> {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -172,7 +177,7 @@ impl<'d> Collector for Incremental<'d> {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -211,7 +216,7 @@ impl<'d> Collector for Incremental<'d> {
         Ok(result.into())
     }
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -222,28 +227,31 @@ impl<'d> Collector for Incremental<'d> {
 }
 
 impl<'d> ListCollector for Incremental<'d> {
-    fn collect_full<T>(&self, _: &Full<T>) -> Result<Vec<Tuples<T>>>
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
     {
-        bail!("cannot evaluate Full")
+        Err(Error::UnsupportedExpression {
+            name: "Full".to_string(),
+            operation: "Evaluate".to_string(),
+        })
     }
 
-    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Vec<Tuples<T>>>
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
     {
         Ok(Vec::new().into())
     }
 
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
     {
         Ok(vec![vec![singleton.0.clone()].into()])
     }
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
     {
@@ -255,7 +263,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -275,7 +283,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -299,7 +307,10 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Vec<Tuples<T>>>
+    fn collect_intersect<T, L, R>(
+        &self,
+        intersect: &Intersect<T, L, R>,
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -322,7 +333,7 @@ impl<'d> ListCollector for Incremental<'d> {
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -340,7 +351,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -360,7 +371,7 @@ impl<'d> ListCollector for Incremental<'d> {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -388,7 +399,7 @@ impl<'d> ListCollector for Incremental<'d> {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Vec<Tuples<T>>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -414,7 +425,7 @@ impl<'d> ListCollector for Incremental<'d> {
         Ok(result)
     }
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -431,28 +442,31 @@ impl<'d> ListCollector for Incremental<'d> {
 pub(super) struct Evaluator<'d>(pub &'d Database);
 
 impl<'d> Collector for Evaluator<'d> {
-    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>>
+    fn collect_full<T>(&self, _: &Full<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
-        bail!("cannot evaluate Full")
+        Err(Error::UnsupportedExpression {
+            name: "Full".to_string(),
+            operation: "Evaluate".to_string(),
+        })
     }
 
-    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>>
+    fn collect_empty<T>(&self, _: &Empty<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
         Ok(Vec::new().into())
     }
 
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
         Ok(vec![singleton.0.clone()].into())
     }
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
     {
@@ -471,7 +485,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -496,7 +510,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -522,7 +536,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>>
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -549,7 +563,10 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -576,7 +593,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -605,7 +622,7 @@ impl<'d> Collector for Evaluator<'d> {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -637,7 +654,7 @@ impl<'d> Collector for Evaluator<'d> {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
+    ) -> Result<Tuples<T>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -667,7 +684,7 @@ impl<'d> Collector for Evaluator<'d> {
         Ok(result)
     }
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,

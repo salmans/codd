@@ -1,5 +1,4 @@
-use anyhow::Result;
-use relalg::{relalg, Database};
+use relalg::{relalg, Database, Error};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Person {
@@ -9,7 +8,7 @@ struct Person {
     name: String,
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Error> {
     let mut family = Database::new();
     let person = relalg! { create relation "Person":[Person] in family };
     relalg! (

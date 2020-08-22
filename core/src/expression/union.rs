@@ -1,5 +1,5 @@
 use super::{Collector, Expression, ListCollector, Visitor};
-use crate::{Tuple, Tuples};
+use crate::{Error, Tuple, Tuples};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -50,14 +50,14 @@ where
         visitor.visit_union(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> anyhow::Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: Collector,
     {
         collector.collect_union(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> anyhow::Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: ListCollector,
     {

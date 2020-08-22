@@ -1,5 +1,5 @@
 use super::Expression;
-use crate::Tuple;
+use crate::{Error, Tuple};
 
 #[derive(Clone)]
 pub struct Singleton<T>(pub(crate) T)
@@ -17,14 +17,14 @@ where
         visitor.visit_singleton(&self)
     }
 
-    fn collect<C>(&self, collector: &C) -> anyhow::Result<crate::Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<crate::Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_singleton(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> anyhow::Result<Vec<crate::Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<crate::Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {

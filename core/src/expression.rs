@@ -12,8 +12,8 @@ mod union;
 mod view;
 
 use crate::{database::Tuples, Tuple};
-use anyhow::Result;
 
+use crate::Error;
 pub use difference::Difference;
 pub use empty::Empty;
 pub use full::Full;
@@ -32,11 +32,11 @@ pub trait Expression<T: Tuple>: Clone {
     where
         V: Visitor;
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: Collector;
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: ListCollector;
 }
@@ -269,109 +269,37 @@ where
 }
 
 pub trait Collector {
-    fn collect_full<T>(&self, full: &Full<T>) -> Result<Tuples<T>>
+    fn collect_full<T>(&self, full: &Full<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Tuples<T>>
+    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>>
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T>;
 
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
         R: Expression<T>;
 
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Tuples<T>>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_difference<T, L, R>(&self, difference: &Difference<T, L, R>) -> Result<Tuples<T>>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>>
-    where
-        T: Tuple,
-        S: Tuple,
-        E: Expression<S>;
-
-    fn collect_product<L, R, Left, Right, T>(
+    fn collect_intersect<T, L, R>(
         &self,
-        product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
-    where
-        L: Tuple,
-        R: Tuple,
-        T: Tuple,
-        Left: Expression<L>,
-        Right: Expression<R>;
-
-    fn collect_join<K, L, R, Left, Right, T>(
-        &self,
-        join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>>
-    where
-        K: Tuple,
-        L: Tuple,
-        R: Tuple,
-        T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>;
-
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>>
-    where
-        T: Tuple,
-        E: Expression<T> + 'static;
-}
-
-pub trait ListCollector {
-    fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Tuples<T>>>
-    where
-        T: Tuple;
-
-    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Tuples<T>>>
-    where
-        T: Tuple;
-
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>>
-    where
-        T: Tuple;
-
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>>
-    where
-        T: Tuple;
-
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>>
-    where
-        T: Tuple,
-        E: Expression<T>;
-
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Vec<Tuples<T>>>
+        intersect: &Intersect<T, L, R>,
+    ) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
@@ -380,13 +308,13 @@ pub trait ListCollector {
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: Expression<T>,
         R: Expression<T>;
 
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -395,7 +323,7 @@ pub trait ListCollector {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Tuples<T>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -406,7 +334,7 @@ pub trait ListCollector {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>>
+    ) -> Result<Tuples<T>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -415,7 +343,88 @@ pub trait ListCollector {
         Left: Expression<(K, L)>,
         Right: Expression<(K, R)>;
 
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
+    where
+        T: Tuple,
+        E: Expression<T> + 'static;
+}
+
+pub trait ListCollector {
+    fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple;
+
+    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple;
+
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple;
+
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple;
+
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+        E: Expression<T>;
+
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
+    fn collect_intersect<T, L, R>(
+        &self,
+        intersect: &Intersect<T, L, R>,
+    ) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
+    fn collect_difference<T, L, R>(
+        &self,
+        difference: &Difference<T, L, R>,
+    ) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>;
+
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>, Error>
+    where
+        T: Tuple,
+        S: Tuple,
+        E: Expression<S>;
+
+    fn collect_product<L, R, Left, Right, T>(
+        &self,
+        product: &Product<L, R, Left, Right, T>,
+    ) -> Result<Vec<Tuples<T>>, Error>
+    where
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<L>,
+        Right: Expression<R>;
+
+    fn collect_join<K, L, R, Left, Right, T>(
+        &self,
+        join: &Join<K, L, R, Left, Right, T>,
+    ) -> Result<Vec<Tuples<T>>, Error>
+    where
+        K: Tuple,
+        L: Tuple,
+        R: Tuple,
+        T: Tuple,
+        Left: Expression<(K, L)>,
+        Right: Expression<(K, R)>;
+
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static;

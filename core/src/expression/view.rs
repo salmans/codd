@@ -1,9 +1,9 @@
 use super::{Expression, Visitor};
 use crate::{
     database::{Tuples, ViewRef},
+    expression::Error,
     Tuple,
 };
-use anyhow::Result;
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -41,14 +41,14 @@ where
         visitor.visit_view(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_view(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {

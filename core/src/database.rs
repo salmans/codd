@@ -4,9 +4,8 @@ mod helpers;
 
 use crate::{
     expression::{Expression, Relation, View},
-    Tuple,
+    Error, Tuple,
 };
-use anyhow::{anyhow, Result};
 use helpers::gallop;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
@@ -132,7 +131,7 @@ trait MaterializedViewExt {
 
     fn instance(&self) -> &dyn InstanceExt;
 
-    fn recalculate(&self, db: &Database) -> Result<()>;
+    fn recalculate(&self, db: &Database) -> Result<(), Error>;
 
     fn duplicate(&self) -> Box<dyn MaterializedViewExt>;
 }
@@ -159,7 +158,7 @@ where
         &self.instance
     }
 
-    fn recalculate(&self, db: &Database) -> Result<()> {
+    fn recalculate(&self, db: &Database) -> Result<(), Error> {
         let recent = evaluate::Incremental(db);
         let recent = self.expression.collect(&recent)?;
         self.instance.insert(recent);
@@ -267,7 +266,7 @@ impl Database {
         }
     }
 
-    pub fn evaluate<T, E>(&self, expression: &E) -> Result<Tuples<T>>
+    pub fn evaluate<T, E>(&self, expression: &E) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: Expression<T>,
@@ -286,18 +285,20 @@ impl Database {
         Relation::new(name)
     }
 
-    pub fn insert<T: Tuple>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<()> {
+    pub fn insert<T: Tuple>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error> {
         let instance = self.relation_instance(&relation)?;
         instance.insert(tuples);
         Ok(())
     }
 
-    fn relation_instance<T: Tuple>(&self, relation: &Relation<T>) -> Result<&Instance<T>> {
+    fn relation_instance<T: Tuple>(&self, relation: &Relation<T>) -> Result<&Instance<T>, Error> {
         let result = self
             .relations
             .get(&relation.name)
             .and_then(|r| r.instance.as_any().downcast_ref::<Instance<T>>())
-            .ok_or(anyhow!(format!("relation not found: '{}'", relation.name)))?;
+            .ok_or(Error::InstanceNotFound {
+                name: relation.name.clone(),
+            })?;
         Ok(result)
     }
 
@@ -341,7 +342,7 @@ impl Database {
         View::new(reference)
     }
 
-    fn view_instance<T, E>(&self, view: &View<T, E>) -> Result<&Instance<T>>
+    fn view_instance<T, E>(&self, view: &View<T, E>) -> Result<&Instance<T>, Error>
     where
         T: Tuple,
         E: Expression<T> + 'static,
@@ -350,11 +351,13 @@ impl Database {
             .views
             .get(&view.reference)
             .and_then(|v| v.instance.as_any().downcast_ref::<MaterializedView<T, E>>())
-            .ok_or(anyhow!("view not found"))?;
+            .ok_or(Error::InstanceNotFound {
+                name: format!("{:?}", view.reference),
+            })?;
         Ok(&result.instance)
     }
 
-    fn recalculate_view(&self, view_ref: &ViewRef) -> Result<()> {
+    fn recalculate_view(&self, view_ref: &ViewRef) -> Result<(), Error> {
         if let Some(entry) = self.views.get(view_ref) {
             for r in entry.up_relation_refs.iter() {
                 self.recalculate_relation(r)?;
@@ -374,7 +377,7 @@ impl Database {
         Ok(())
     }
 
-    fn recalculate_relation(&self, relation_ref: &RelationRef) -> Result<()> {
+    fn recalculate_relation(&self, relation_ref: &RelationRef) -> Result<(), Error> {
         if let Some(entry) = self.relations.get(relation_ref) {
             while entry.instance.changed() {
                 for r in entry.down_refs.iter() {

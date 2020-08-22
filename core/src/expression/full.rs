@@ -1,6 +1,5 @@
 use super::{Expression, Visitor};
-use crate::{database::Tuples, Tuple};
-use anyhow::Result;
+use crate::{database::Tuples, expression::Error, Tuple};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -33,14 +32,14 @@ where
         visitor.visit_full(&self);
     }
 
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>>
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: super::Collector,
     {
         collector.collect_full(&self)
     }
 
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>>
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: super::ListCollector,
     {
