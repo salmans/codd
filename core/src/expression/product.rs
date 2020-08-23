@@ -83,8 +83,8 @@ mod tests {
     #[test]
     fn test_clone() {
         let mut database = Database::new();
-        let r = database.add_relation::<i32>("r");
-        let s = database.add_relation::<i32>("s");
+        let r = database.add_relation::<i32>("r").unwrap();
+        let s = database.add_relation::<i32>("s").unwrap();
         database.insert(&r, vec![1, 10].into()).unwrap();
         database.insert(&s, vec![1, 100].into()).unwrap();
         let v = Product::new(&r, &s, |&l, &r| l + r).clone();

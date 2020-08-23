@@ -19,4 +19,7 @@ pub enum Error {
 
     #[error("database instance `{name:?}` not found")]
     InstanceNotFound { name: String },
+
+    #[error("database instance `{name:?}` already exists")]
+    InstanceExists { name: String },
 }

@@ -56,6 +56,14 @@ struct Instance<T: Tuple> {
 }
 
 impl<T: Tuple> Instance<T> {
+    fn new() -> Self {
+        Self {
+            stable: Rc::new(RefCell::new(Vec::new())),
+            recent: Rc::new(RefCell::new(Vec::new().into())),
+            to_add: Rc::new(RefCell::new(Vec::new())),
+        }
+    }
+
     fn insert(&self, tuples: Tuples<T>) {
         if !tuples.is_empty() {
             self.to_add.borrow_mut().push(tuples);
@@ -280,18 +288,19 @@ impl Database {
         expression.collect(&evaluate::Evaluator(self))
     }
 
-    pub fn add_relation<T>(&mut self, name: &str) -> Relation<T>
+    pub fn add_relation<T>(&mut self, name: &str) -> Result<Relation<T>, Error>
     where
         T: Tuple + 'static,
     {
-        let relation: Instance<T> = Instance {
-            stable: Rc::new(RefCell::new(Vec::new())),
-            recent: Rc::new(RefCell::new(Vec::new().into())),
-            to_add: Rc::new(RefCell::new(Vec::new())),
-        };
-        self.relations
-            .insert(name.to_owned(), RelationEntry::new(relation));
-        Relation::new(name)
+        if !self.relations.contains_key(name) {
+            self.relations
+                .insert(name.to_owned(), RelationEntry::new(Instance::<T>::new()));
+            Ok(Relation::new(name))
+        } else {
+            Err(Error::InstanceExists {
+                name: name.to_string(),
+            })
+        }
     }
 
     pub fn insert<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
@@ -489,7 +498,7 @@ mod tests {
     fn test_insert() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
             assert_eq!(
                 Tuples::<i32>::from(vec![1, 2, 3]),
@@ -498,7 +507,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
             assert!(database.insert(&r, vec![1, 4].into()).is_ok());
             assert_eq!(
@@ -512,7 +521,7 @@ mod tests {
         }
         {
             let database = Database::new();
-            let r = Database::new().add_relation("r"); // dummy database
+            let r = Database::new().add_relation("r").unwrap(); // dummy database
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_err());
         }
     }
@@ -685,7 +694,8 @@ mod tests {
     #[test]
     fn test_add_relation() {
         let mut database = Database::new();
-        database.add_relation::<i32>("a");
+        assert!(database.add_relation::<i32>("a").is_ok());
+        assert!(database.add_relation::<i32>("a").is_err()); // duplicate
         assert!(database.relations.get("a").is_some());
         assert!(database.relations.get("b").is_none());
     }
@@ -694,14 +704,11 @@ mod tests {
     fn test_get_relation() {
         let mut database = Database::new();
         let mut dummy = Database::new();
-        let relation_i32 = database.add_relation::<i32>("a");
-        let relation_string = dummy.add_relation::<String>("a");
+        let relation_i32 = database.add_relation::<i32>("a").unwrap();
+        let relation_string = dummy.add_relation::<String>("a").unwrap();
 
         assert!(database.relation_instance(&relation_i32).is_ok());
         assert!(database.relation_instance(&relation_string).is_err());
-
-        let _ = database.add_relation::<String>("a");
-        assert!(database.relation_instance(&relation_string).is_ok());
     }
 
     #[test]
@@ -771,7 +778,7 @@ mod tests {
     #[test]
     fn test_relation_changed() {
         let mut database = Database::new();
-        let r = database.add_relation::<i32>("r");
+        let r = database.add_relation::<i32>("r").unwrap();
         database.insert(&r, vec![1, 2, 3].into()).unwrap();
         let r_inst = database.relation_instance(&r).unwrap();
 
@@ -809,7 +816,7 @@ mod tests {
     fn test_view_changed() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let v = database.store_view(&r);
 
             let r_inst = database.relation_instance(&r).unwrap();
@@ -858,7 +865,7 @@ mod tests {
 
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let v = database.store_view(&Select::new(&r, |t| t % 2 == 1));
 
             let r_inst = database.relation_instance(&r).unwrap();
@@ -907,7 +914,7 @@ mod tests {
 
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let v = database.store_view(&Project::new(&r, |t| t + 1));
 
             let r_inst = database.relation_instance(&r).unwrap();
@@ -956,8 +963,8 @@ mod tests {
 
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let v = database.store_view(&Join::new(&r, &s, |t| t.0, |t| t.0, |&k, _, &r| (k, r.1)));
 
             let r_inst = database.relation_instance(&r).unwrap();
