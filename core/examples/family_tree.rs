@@ -42,7 +42,7 @@ fn main() -> Result<(), Error> {
     )?;
 
     // building the query expression in multiple steps for better clarity:
-    let ariyas_father = relalg! {
+    let aryas_father = relalg! {
         select [|p| (p.father_id.unwrap(), ())] from (person)
         where
             [|p| p.father_id.is_some() && p.name == "Arya Stark"]
@@ -55,7 +55,8 @@ fn main() -> Result<(), Error> {
 
     let fathers_name = relalg! {
         select * from (
-            (ariyas_father) join (persons_name) on [|_, _, name| name.clone()]
+            (aryas_father) join (persons_name) on [|t| t.0; |t| t.0]
+               with [|_, _, name| name.1.clone()]
         )
     };
 

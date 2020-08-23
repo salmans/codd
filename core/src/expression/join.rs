@@ -9,12 +9,14 @@ where
     L: Tuple,
     R: Tuple,
     T: Tuple,
-    Left: Expression<(K, L)>,
-    Right: Expression<(K, R)>,
+    Left: Expression<L>,
+    Right: Expression<R>,
 {
     left: Left,
     right: Right,
-    mapper: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
+    left_key: Rc<RefCell<dyn FnMut(&L) -> K>>,
+    right_key: Rc<RefCell<dyn FnMut(&R) -> K>>,
+    joiner: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
 }
 
 impl<K, L, R, Left, Right, T> Join<K, L, R, Left, Right, T>
@@ -23,14 +25,22 @@ where
     L: Tuple,
     R: Tuple,
     T: Tuple,
-    Left: Expression<(K, L)>,
-    Right: Expression<(K, R)>,
+    Left: Expression<L>,
+    Right: Expression<R>,
 {
-    pub fn new(left: &Left, right: &Right, project: impl FnMut(&K, &L, &R) -> T + 'static) -> Self {
+    pub fn new(
+        left: &Left,
+        right: &Right,
+        left_key: impl FnMut(&L) -> K + 'static,
+        right_key: impl FnMut(&R) -> K + 'static,
+        joiner: impl FnMut(&K, &L, &R) -> T + 'static,
+    ) -> Self {
         Self {
             left: left.clone(),
             right: right.clone(),
-            mapper: Rc::new(RefCell::new(project)),
+            left_key: Rc::new(RefCell::new(left_key)),
+            right_key: Rc::new(RefCell::new(right_key)),
+            joiner: Rc::new(RefCell::new(joiner)),
         }
     }
 
@@ -42,8 +52,16 @@ where
         &self.right
     }
 
+    pub fn left_key(&self) -> &Rc<RefCell<dyn FnMut(&L) -> K>> {
+        &self.left_key
+    }
+
+    pub fn right_key(&self) -> &Rc<RefCell<dyn FnMut(&R) -> K>> {
+        &self.right_key
+    }
+
     pub fn mapper(&self) -> &Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>> {
-        &self.mapper
+        &self.joiner
     }
 }
 
@@ -53,8 +71,8 @@ where
     L: Tuple,
     R: Tuple,
     T: Tuple,
-    Left: Expression<(K, L)>,
-    Right: Expression<(K, R)>,
+    Left: Expression<L>,
+    Right: Expression<R>,
 {
     fn visit<V>(&self, visitor: &mut V)
     where
@@ -90,7 +108,7 @@ mod tests {
         let s = database.add_relation::<(i32, i32)>("s");
         database.insert(&r, vec![(1, 10)].into()).unwrap();
         database.insert(&s, vec![(1, 100)].into()).unwrap();
-        let v = Join::new(&r, &s, |_, &l, &r| (l, r)).clone();
+        let v = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1)).clone();
         assert_eq!(
             Tuples::<(i32, i32)>::from(vec![(10, 100)]),
             database.evaluate(&v).unwrap()

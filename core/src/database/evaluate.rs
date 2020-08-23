@@ -34,7 +34,7 @@ impl<'d> Collector for Incremental<'d> {
 
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
     {
         let table = self.0.relation_instance(relation)?;
         Ok(table.recent.borrow().clone())
@@ -183,17 +183,31 @@ impl<'d> Collector for Incremental<'d> {
         L: Tuple,
         R: Tuple,
         T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>,
+        Left: Expression<L>,
+        Right: Expression<R>,
     {
         let mut result = Vec::new();
         let incremental = Incremental(self.0);
 
+        let left_key = &mut (*join.left_key().borrow_mut());
+        let right_key = &mut (*join.right_key().borrow_mut());
+
         let left_recent = join.left().collect(self)?;
+        let left_recent: Tuples<(K, &L)> = left_recent.iter().map(|t| (left_key(&t), t)).into();
         let right_recent = join.right().collect(self)?;
+        let right_recent: Tuples<(K, &R)> = right_recent.iter().map(|t| (right_key(&t), t)).into();
 
         let left_stable = join.left().collect_list(&incremental)?;
+        let left_stable: Vec<Tuples<(K, &L)>> = left_stable
+            .iter()
+            .map(|batch| batch.iter().map(|t| (left_key(&t), t)).into())
+            .collect();
+
         let right_stable = join.right().collect_list(&incremental)?;
+        let right_stable: Vec<Tuples<(K, &R)>> = right_stable
+            .iter()
+            .map(|batch| batch.iter().map(|t| (right_key(&t), t)).into())
+            .collect();
 
         let mapper = &mut (*join.mapper().borrow_mut());
 
@@ -218,7 +232,7 @@ impl<'d> Collector for Incremental<'d> {
 
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
         let table = self.0.view_instance(view)?;
@@ -253,7 +267,7 @@ impl<'d> ListCollector for Incremental<'d> {
 
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
     {
         let mut result = Vec::<Tuples<T>>::new();
         let table = self.0.relation_instance(&relation)?;
@@ -405,12 +419,24 @@ impl<'d> ListCollector for Incremental<'d> {
         L: Tuple,
         R: Tuple,
         T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>,
+        Left: Expression<L>,
+        Right: Expression<R>,
     {
         let mut result = Vec::<Tuples<T>>::new();
+        let left_key = &mut (*join.left_key().borrow_mut());
+        let right_key = &mut (*join.right_key().borrow_mut());
+
         let left = join.left().collect_list(self)?;
+        let left: Vec<Tuples<(K, &L)>> = left
+            .iter()
+            .map(|batch| batch.iter().map(|t| (left_key(&t), t)).into())
+            .collect();
+
         let right = join.right().collect_list(self)?;
+        let right: Vec<Tuples<(K, &R)>> = right
+            .iter()
+            .map(|batch| batch.iter().map(|t| (right_key(&t), t)).into())
+            .collect();
 
         let mapper = &mut (*join.mapper().borrow_mut());
         for left_batch in left.iter() {
@@ -427,7 +453,7 @@ impl<'d> ListCollector for Incremental<'d> {
 
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
         let mut result = Vec::<Tuples<T>>::new();
@@ -468,7 +494,7 @@ impl<'d> Collector for Evaluator<'d> {
 
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
     {
         self.0.recalculate_relation(&relation.name)?;
         let table = self.0.relation_instance(&relation)?;
@@ -660,8 +686,8 @@ impl<'d> Collector for Evaluator<'d> {
         L: Tuple,
         R: Tuple,
         T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>,
+        Left: Expression<L>,
+        Right: Expression<R>,
     {
         let mut elements = Elements::new();
         join.visit(&mut elements);
@@ -686,7 +712,7 @@ impl<'d> Collector for Evaluator<'d> {
 
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
         self.0.recalculate_view(&view.reference)?;
@@ -928,7 +954,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
 
             let result = database.evaluate(&join).unwrap();
             assert_eq!(Tuples::<(i32, i32)>::from(vec![]), result);
@@ -937,7 +963,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
@@ -949,12 +975,12 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s1 = Singleton((1, 2));
             let s2 = Singleton((3, 5));
-            let r_s1 = Join::new(&r, &s1, |_, &l, &r| (l, r));
+            let r_s1 = Join::new(&r, &s1, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
             database.evaluate(&r_s1).unwrap(); // materialize the first view
-            let r_s1_s2 = Join::new(&r_s1, &s2, |_, &l, &r| (l, r));
+            let r_s1_s2 = Join::new(&r_s1, &s2, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let result = database.evaluate(&r_s1_s2).unwrap();
             assert_eq!(Tuples::from(vec![(2, 5)]), result);
         }
@@ -962,7 +988,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
                 .unwrap();
@@ -974,7 +1000,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
                 .unwrap();
@@ -993,8 +1019,8 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
             let t = database.add_relation::<(i32, i32)>("t");
-            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
-            let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
+            let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
+            let r_s_t = Join::new(&r_s, &t, |t| t.0, |t| t.0, |_, _, &r| r.1);
 
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1014,7 +1040,7 @@ mod tests {
             let mut dummy = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = dummy.add_relation::<(i32, i32)>("s");
-            let join = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             assert!(database.evaluate(&join).is_err());
         }
     }
@@ -1273,7 +1299,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let view = database.store_view(&r_s);
 
             database
@@ -1293,7 +1319,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
+            let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let view = database.store_view(&r_s);
 
             database
@@ -1316,8 +1342,8 @@ mod tests {
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
             let t = database.add_relation::<(i32, i32)>("t");
-            let r_s = Join::new(&r, &s, |_, &l, &r| (l, r));
-            let r_s_t = Join::new(&r_s, &t, |_, _, &r| r);
+            let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
+            let r_s_t = Join::new(&r_s, &t, |t| t.0, |t| t.0, |_, _, &r| r.1);
             let view = database.store_view(&r_s_t);
 
             database
@@ -1339,7 +1365,7 @@ mod tests {
             let s = database.add_relation::<(i32, i32)>("s");
             let t = database.add_relation::<(i32, i32)>("t");
             let rs = Union::new(&r, &s);
-            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             let view = database.store_view(&rs_t);
 
             database
@@ -1364,7 +1390,7 @@ mod tests {
             let s = database.add_relation::<(i32, i32)>("s");
             let t = database.add_relation::<(i32, i32)>("t");
             let rs = Intersect::new(&r, &s);
-            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             let view = database.store_view(&rs_t);
 
             database
@@ -1386,7 +1412,7 @@ mod tests {
             let s = database.add_relation::<(i32, i32)>("s");
             let t = database.add_relation::<(i32, i32)>("t");
             let rs = Difference::new(&r, &s);
-            let rs_t = Join::new(&rs, &t, |_, &l, &r| l * r);
+            let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             let view = database.store_view(&rs_t);
 
             database

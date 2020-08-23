@@ -131,8 +131,8 @@ pub trait Visitor: Sized {
         L: Tuple,
         R: Tuple,
         T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>,
+        Left: Expression<L>,
+        Right: Expression<R>,
     {
         walk_join(self, join);
     }
@@ -251,8 +251,8 @@ where
     L: Tuple,
     R: Tuple,
     T: Tuple,
-    Left: Expression<(K, L)>,
-    Right: Expression<(K, R)>,
+    Left: Expression<L>,
+    Right: Expression<R>,
     V: Visitor,
 {
     join.left().visit(visitor);
@@ -283,7 +283,7 @@ pub trait Collector {
 
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
-        T: Tuple;
+        T: Tuple + 'static;
 
     fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
@@ -340,12 +340,12 @@ pub trait Collector {
         L: Tuple,
         R: Tuple,
         T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>;
+        Left: Expression<L>,
+        Right: Expression<R>;
 
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static;
 }
 
@@ -364,7 +364,7 @@ pub trait ListCollector {
 
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
     where
-        T: Tuple;
+        T: Tuple + 'static;
 
     fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
@@ -421,11 +421,11 @@ pub trait ListCollector {
         L: Tuple,
         R: Tuple,
         T: Tuple,
-        Left: Expression<(K, L)>,
-        Right: Expression<(K, R)>;
+        Left: Expression<L>,
+        Right: Expression<R>;
 
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static;
 }

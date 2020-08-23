@@ -53,11 +53,11 @@ macro_rules! relexp {
     (select * from ($($rel_exp:tt)*) $(where [$pred:expr])?) => {
         $crate::relexp!(@select ($($rel_exp)*) $(@pred -> [$pred])?)
     };
-    (($($left:tt)*) cross join ($($right:tt)*) on [$mapper:expr]) => {
+    (($($left:tt)*) cross ($($right:tt)*) on [$mapper:expr]) => {
         $crate::relexp!(@cross ($($left)*) ($($right)*) @mapper -> [$mapper])
     };
-    (($($left:tt)*) join ($($right:tt)*) on [$mapper:expr]) => {
-        $crate::relexp!(@join ($($left)*) ($($right)*) @mapper -> [$mapper])
+    (($($left:tt)*) join ($($right:tt)*) on [$lkey:expr ; $rkey:expr] with [$mapper:expr]) => {
+        $crate::relexp!(@join ($($left)*) @lkey -> [$lkey] ($($right)*) @rkey -> [$rkey] @mapper -> [$mapper])
     };
     (($($left:tt)*) union ($($right:tt)*)) => {
         $crate::relexp!(@union ($($left)*) ($($right)*))
@@ -89,10 +89,10 @@ macro_rules! relexp {
         let right = $crate::relexp!($($right)*);
         $crate::Product::new(&left, &right, $mapper)
     }};
-    (@join ($($left:tt)*) ($($right:tt)*) @mapper -> [$mapper:expr]) => {{
+    (@join ($($left:tt)*) @lkey -> [$lkey:expr] ($($right:tt)*) @rkey -> [$rkey:expr] @mapper -> [$mapper:expr]) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Join::new(&left, &right, $mapper)
+        $crate::Join::new(&left, &right, $lkey, $rkey, $mapper)
     }};
     (@union ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
@@ -253,7 +253,7 @@ mod tests {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database};
             let s = relalg! { create relation "s":[i32] in database};
-            let exp = relexp!((r) cross join (s) on [|&l, &r| l + r]);
+            let exp = relexp!((r) cross (s) on [|&l, &r| l + r]);
             relalg! (insert into (r) values [
                 1, 2, 3
             ] in database)
@@ -273,8 +273,8 @@ mod tests {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[(i32, String)] in database};
             let s = relalg! { create relation "s":[(i32, String)] in database};
-            let exp = relexp!((r) join (s) on [|_, x, y| {
-                let mut s = x.clone(); s.push_str(y); s
+            let exp = relexp!((r) join (s) on [|t| t.0; |t| t.0] with [|_, x, y| {
+                let mut s = x.1.clone(); s.push_str(&y.1); s
             }]);
             relalg! (insert into (r) values [
                 (1, "a".to_string()),
