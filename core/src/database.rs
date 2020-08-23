@@ -63,7 +63,10 @@ impl<T: Tuple> Instance<T> {
     }
 }
 
-impl<T: Tuple> InstanceExt for Instance<T> {
+impl<T> InstanceExt for Instance<T>
+where
+    T: Tuple + 'static,
+{
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -147,7 +150,7 @@ where
 
 impl<T, E> MaterializedViewExt for MaterializedView<T, E>
 where
-    T: Tuple,
+    T: Tuple + 'static,
     E: Expression<T> + 'static,
 {
     fn as_any(&self) -> &dyn Any {
@@ -183,7 +186,7 @@ struct ViewEntry {
 impl ViewEntry {
     fn new<T, E>(view: MaterializedView<T, E>) -> Self
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
         Self {
@@ -214,7 +217,10 @@ struct RelationEntry {
 }
 
 impl RelationEntry {
-    fn new<T: Tuple>(view: Instance<T>) -> Self {
+    fn new<T>(view: Instance<T>) -> Self
+    where
+        T: Tuple + 'static,
+    {
         Self {
             instance: Box::new(view),
             down_refs: Vec::new(),
@@ -274,7 +280,10 @@ impl Database {
         expression.collect(&evaluate::Evaluator(self))
     }
 
-    pub fn add_relation<T: Tuple>(&mut self, name: &str) -> Relation<T> {
+    pub fn add_relation<T>(&mut self, name: &str) -> Relation<T>
+    where
+        T: Tuple + 'static,
+    {
         let relation: Instance<T> = Instance {
             stable: Rc::new(RefCell::new(Vec::new())),
             recent: Rc::new(RefCell::new(Vec::new().into())),
@@ -285,13 +294,19 @@ impl Database {
         Relation::new(name)
     }
 
-    pub fn insert<T: Tuple>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error> {
+    pub fn insert<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
+    where
+        T: Tuple + 'static,
+    {
         let instance = self.relation_instance(&relation)?;
         instance.insert(tuples);
         Ok(())
     }
 
-    fn relation_instance<T: Tuple>(&self, relation: &Relation<T>) -> Result<&Instance<T>, Error> {
+    fn relation_instance<T>(&self, relation: &Relation<T>) -> Result<&Instance<T>, Error>
+    where
+        T: Tuple + 'static,
+    {
         let result = self
             .relations
             .get(&relation.name)
@@ -304,7 +319,7 @@ impl Database {
 
     pub fn store_view<T, E>(&mut self, expression: &E) -> View<T, E>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
         let reference = ViewRef(self.view_counter);
@@ -344,7 +359,7 @@ impl Database {
 
     fn view_instance<T, E>(&self, view: &View<T, E>) -> Result<&Instance<T>, Error>
     where
-        T: Tuple,
+        T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
         let result = self
@@ -719,6 +734,8 @@ mod tests {
             database.store_view(&Join::new(
                 &Relation::<(i32, i32)>::new("a"),
                 &Relation::<(i32, i32)>::new("b"),
+                |t| t.0,
+                |t| t.0,
                 |_, &l, &r| (l, r),
             ));
 
@@ -941,7 +958,7 @@ mod tests {
             let mut database = Database::new();
             let r = database.add_relation::<(i32, i32)>("r");
             let s = database.add_relation::<(i32, i32)>("s");
-            let v = database.store_view(&Join::new(&r, &s, |&k, _, &r| (k, r)));
+            let v = database.store_view(&Join::new(&r, &s, |t| t.0, |t| t.0, |&k, _, &r| (k, r.1)));
 
             let r_inst = database.relation_instance(&r).unwrap();
             let s_inst = database.relation_instance(&s).unwrap();

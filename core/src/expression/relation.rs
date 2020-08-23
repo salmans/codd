@@ -25,7 +25,7 @@ where
 
 impl<T> Expression<T> for Relation<T>
 where
-    T: Tuple,
+    T: Tuple + 'static,
 {
     fn visit<V>(&self, visitor: &mut V)
     where
