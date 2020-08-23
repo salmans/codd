@@ -765,7 +765,7 @@ mod tests {
     fn test_evaluate_relation() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let result = database.evaluate(&r).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
@@ -773,7 +773,7 @@ mod tests {
         {
             let database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
+            let r = dummy.add_relation::<i32>("r").unwrap();
 
             assert!(database.evaluate(&r).is_err());
         }
@@ -782,7 +782,7 @@ mod tests {
     fn test_evaluate_project() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let project = Project::new(&r, |t| t * 10);
 
             let result = database.evaluate(&project).unwrap();
@@ -790,7 +790,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let project = Project::new(&r, |t| t * 10);
             database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
 
@@ -799,7 +799,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let p1 = Project::new(&r, |t| t * 10);
             let p2 = Project::new(&p1, |t| t + 1);
 
@@ -811,7 +811,7 @@ mod tests {
         {
             let database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
+            let r = dummy.add_relation::<i32>("r").unwrap();
             let project = Project::new(&r, |t| t + 1);
             assert!(database.evaluate(&project).is_err());
         }
@@ -820,7 +820,7 @@ mod tests {
     fn test_evaluate_select() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let project = Select::new(&r, |t| t % 2 == 1);
 
             let result = database.evaluate(&project).unwrap();
@@ -836,7 +836,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let select = Select::new(&r, |t| t % 2 == 0);
             database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
 
@@ -845,7 +845,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let p1 = Select::new(&r, |t| t % 2 == 0);
             let p2 = Select::new(&p1, |&t| t > 3);
 
@@ -857,7 +857,7 @@ mod tests {
         {
             let database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
+            let r = dummy.add_relation::<i32>("r").unwrap();
             let select = Select::new(&r, |&t| t > 1);
             assert!(database.evaluate(&select).is_err());
         }
@@ -866,8 +866,8 @@ mod tests {
     fn test_evaluate_product() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
 
             let result = database.evaluate(&u).unwrap();
@@ -875,8 +875,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
 
@@ -885,8 +885,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
 
@@ -905,8 +905,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
             database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
             database.insert(&s, vec![0, 4, 5, 6].into()).unwrap();
@@ -919,9 +919,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
-            let t = database.add_relation::<i32>("t");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
+            let t = database.add_relation::<i32>("t").unwrap();
             let u1 = Product::new(&r, &s, |&l, &r| l + r);
             let u2 = Product::new(&u1, &t, |&l, &r| l + r);
 
@@ -942,8 +942,8 @@ mod tests {
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = dummy.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Product::new(&r, &s, |&l, &r| l + r);
             assert!(database.evaluate(&u).is_err());
         }
@@ -952,8 +952,8 @@ mod tests {
     fn test_evaluate_join() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
 
             let result = database.evaluate(&join).unwrap();
@@ -961,8 +961,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -972,7 +972,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
             let s1 = Singleton((1, 2));
             let s2 = Singleton((3, 5));
             let r_s1 = Join::new(&r, &s1, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
@@ -986,8 +986,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&s, vec![(1, 5), (3, 2), (1, 6)].into())
@@ -998,8 +998,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1016,9 +1016,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let t = database.add_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
+            let t = database.add_relation::<(i32, i32)>("t").unwrap();
             let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let r_s_t = Join::new(&r_s, &t, |t| t.0, |t| t.0, |_, _, &r| r.1);
 
@@ -1038,8 +1038,8 @@ mod tests {
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = dummy.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = dummy.add_relation::<(i32, i32)>("s").unwrap();
             let join = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             assert!(database.evaluate(&join).is_err());
         }
@@ -1048,8 +1048,8 @@ mod tests {
     fn test_evaluate_union() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Union::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1057,8 +1057,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Union::new(&r, &s);
 
@@ -1067,8 +1067,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Union::new(&r, &s);
 
@@ -1087,8 +1087,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Union::new(&r, &s);
             database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
             database.insert(&s, vec![0, 4, 5, 6].into()).unwrap();
@@ -1098,9 +1098,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
-            let t = database.add_relation::<i32>("t");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
+            let t = database.add_relation::<i32>("t").unwrap();
             let u1 = Union::new(&r, &s);
             let u2 = Union::new(&u1, &t);
 
@@ -1117,8 +1117,8 @@ mod tests {
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = dummy.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Union::new(&r, &s);
             assert!(database.evaluate(&u).is_err());
         }
@@ -1127,8 +1127,8 @@ mod tests {
     fn test_evaluate_intersect() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Intersect::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1136,8 +1136,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Intersect::new(&r, &s);
 
@@ -1146,8 +1146,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Intersect::new(&r, &s);
 
@@ -1166,8 +1166,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Intersect::new(&r, &s);
             database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
             database.insert(&s, vec![0, 4, 2, 6].into()).unwrap();
@@ -1177,9 +1177,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
-            let t = database.add_relation::<i32>("t");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
+            let t = database.add_relation::<i32>("t").unwrap();
             let u1 = Intersect::new(&r, &s);
             let u2 = Intersect::new(&u1, &t);
 
@@ -1193,8 +1193,8 @@ mod tests {
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = dummy.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Intersect::new(&r, &s);
             assert!(database.evaluate(&u).is_err());
         }
@@ -1203,8 +1203,8 @@ mod tests {
     fn test_evaluate_difference() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Difference::new(&r, &s);
 
             let result = database.evaluate(&u).unwrap();
@@ -1212,8 +1212,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let u = Difference::new(&r, &s);
 
@@ -1222,8 +1222,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&s, vec![4, 5].into()).unwrap();
             let u = Difference::new(&r, &s);
 
@@ -1242,8 +1242,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Difference::new(&r, &s);
             database.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
             database.insert(&s, vec![0, 4, 2, 6].into()).unwrap();
@@ -1253,9 +1253,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
-            let t = database.add_relation::<i32>("t");
+            let r = database.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
+            let t = database.add_relation::<i32>("t").unwrap();
             let u1 = Difference::new(&r, &s);
             let u2 = Difference::new(&u1, &t);
 
@@ -1269,8 +1269,8 @@ mod tests {
         {
             let mut database = Database::new();
             let mut dummy = Database::new();
-            let r = dummy.add_relation::<i32>("r");
-            let s = database.add_relation::<i32>("s");
+            let r = dummy.add_relation::<i32>("r").unwrap();
+            let s = database.add_relation::<i32>("s").unwrap();
             let u = Difference::new(&r, &s);
             assert!(database.evaluate(&u).is_err());
         }
@@ -1279,7 +1279,7 @@ mod tests {
     fn test_evaluate_view() {
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let v = database.store_view(&r);
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let result = database.evaluate(&v).unwrap();
@@ -1287,7 +1287,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<i32>("r");
+            let r = database.add_relation::<i32>("r").unwrap();
             let v_1 = database.store_view(&r);
             let v_2 = database.store_view(&v_1);
             let v_3 = database.store_view(&v_2);
@@ -1297,8 +1297,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let view = database.store_view(&r_s);
 
@@ -1317,8 +1317,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let view = database.store_view(&r_s);
 
@@ -1339,9 +1339,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let t = database.add_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
+            let t = database.add_relation::<(i32, i32)>("t").unwrap();
             let r_s = Join::new(&r, &s, |t| t.0, |t| t.0, |_, &l, &r| (l.1, r.1));
             let r_s_t = Join::new(&r_s, &t, |t| t.0, |t| t.0, |_, _, &r| r.1);
             let view = database.store_view(&r_s_t);
@@ -1361,9 +1361,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let t = database.add_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
+            let t = database.add_relation::<(i32, i32)>("t").unwrap();
             let rs = Union::new(&r, &s);
             let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             let view = database.store_view(&rs_t);
@@ -1386,9 +1386,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let t = database.add_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
+            let t = database.add_relation::<(i32, i32)>("t").unwrap();
             let rs = Intersect::new(&r, &s);
             let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             let view = database.store_view(&rs_t);
@@ -1408,9 +1408,9 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = database.add_relation::<(i32, i32)>("r");
-            let s = database.add_relation::<(i32, i32)>("s");
-            let t = database.add_relation::<(i32, i32)>("t");
+            let r = database.add_relation::<(i32, i32)>("r").unwrap();
+            let s = database.add_relation::<(i32, i32)>("s").unwrap();
+            let t = database.add_relation::<(i32, i32)>("t").unwrap();
             let rs = Difference::new(&r, &s);
             let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             let view = database.store_view(&rs_t);

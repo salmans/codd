@@ -120,12 +120,12 @@ mod tests {
     fn test_relalg() {
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             assert!(database.evaluate(&r).is_ok());
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let exp = relalg! { select * from(r) };
             let result = database.evaluate(&exp).unwrap();
@@ -133,7 +133,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relalg!(select * from (r) where [|t| t % 2 == 0]);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let result = database.evaluate(&exp).unwrap();
@@ -141,7 +141,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relalg!(select * from
                                  (select * from (r) where [|&t| t > 2])
                 where [|t| t % 2 == 0]);
@@ -151,7 +151,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relalg!(select [|t| t + 1] from
                                  (select * from (r) where [|&t| t > 2]));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
@@ -160,13 +160,13 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let v = relalg! { create view as (select * from (r)) in database};
             assert!(database.evaluate(&v).is_ok());
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let v = relalg! { create view as (select [|&x| x > 0] from (r)) in database};
             assert!(database.evaluate(&v).is_ok());
         }
@@ -200,7 +200,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relexp!(r);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let result = database.evaluate(&exp).unwrap();
@@ -208,7 +208,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relexp!(select * from (r) where [|t| t % 2 == 0]);
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let result = database.evaluate(&exp).unwrap();
@@ -216,7 +216,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relexp!(select * from
                                  (select * from (r) where [|&t| t > 2])
                 where [|t| t % 2 == 0]);
@@ -226,7 +226,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relexp!(select [|t| t + 1] from (r));
             relalg! (insert into (r) values [3, 4, 5, 6] in database).unwrap();
             let result = database.evaluate(&exp).unwrap();
@@ -234,7 +234,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relexp!(select [|t| t + 1] from
                                  (select * from (r) where [|&t| t > 2]));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
@@ -243,7 +243,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let exp = relexp!(select * from(r));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let result = database.evaluate(&exp).unwrap();
@@ -251,8 +251,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
-            let s = relalg! { create relation "s":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
+            let s = relalg! { create relation "s":[i32] in database}.unwrap();
             let exp = relexp!((r) cross (s) on [|&l, &r| l + r]);
             relalg! (insert into (r) values [
                 1, 2, 3
@@ -271,8 +271,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[(i32, String)] in database};
-            let s = relalg! { create relation "s":[(i32, String)] in database};
+            let r = relalg! { create relation "r":[(i32, String)] in database}.unwrap();
+            let s = relalg! { create relation "s":[(i32, String)] in database}.unwrap();
             let exp = relexp!((r) join (s) on [|t| t.0; |t| t.0] with [|_, x, y| {
                 let mut s = x.1.clone(); s.push_str(&y.1); s
             }]);
@@ -296,8 +296,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[String] in database};
-            let s = relalg! { create relation "s":[String] in database};
+            let r = relalg! { create relation "r":[String] in database}.unwrap();
+            let s = relalg! { create relation "s":[String] in database}.unwrap();
             let exp = relexp!((r) union (s));
             relalg! (insert into (r) values [
                 "a".to_string(),
@@ -322,8 +322,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[String] in database};
-            let s = relalg! { create relation "s":[String] in database};
+            let r = relalg! { create relation "r":[String] in database}.unwrap();
+            let s = relalg! { create relation "s":[String] in database}.unwrap();
             let exp = relexp!((r) intersect (s));
             relalg! (insert into (r) values [
                 "a".to_string(),
@@ -340,8 +340,8 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[String] in database};
-            let s = relalg! { create relation "s":[String] in database};
+            let r = relalg! { create relation "r":[String] in database}.unwrap();
+            let s = relalg! { create relation "s":[String] in database}.unwrap();
             let exp = relexp!((r) minus (s));
             relalg! (insert into (r) values [
                 "a".to_string(),
@@ -358,7 +358,7 @@ mod tests {
         }
         {
             let mut database = Database::new();
-            let r = relalg! { create relation "r":[i32] in database};
+            let r = relalg! { create relation "r":[i32] in database}.unwrap();
             let v = relalg! { create view as (select * from (r)) in database};
             let exp = relexp!(select * from(v));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();

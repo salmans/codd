@@ -73,8 +73,8 @@ mod tests {
     #[test]
     fn test_clone() {
         let mut database = Database::new();
-        let r = database.add_relation::<i32>("r");
-        let s = database.add_relation::<i32>("s");
+        let r = database.add_relation::<i32>("r").unwrap();
+        let s = database.add_relation::<i32>("s").unwrap();
         database.insert(&r, vec![1, 2, 3].into()).unwrap();
         database.insert(&s, vec![4, 5].into()).unwrap();
         let u = Union::new(&r, &s).clone();
