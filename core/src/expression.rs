@@ -429,3 +429,96 @@ pub trait ListCollector {
         T: Tuple + 'static,
         E: Expression<T> + 'static;
 }
+
+#[derive(Clone)]
+pub enum Mono<T: Tuple + 'static> {
+    Full(Full<T>),
+    Empty(Empty<T>),
+    Relation(Relation<T>),
+    Select(Select<T, Box<Mono<T>>>),
+    Project(Project<T, T, Box<Mono<T>>>),
+    Union(Union<T, Box<Mono<T>>, Box<Mono<T>>>),
+    Intersect(Intersect<T, Box<Mono<T>>, Box<Mono<T>>>),
+    Difference(Difference<T, Box<Mono<T>>, Box<Mono<T>>>),
+    Product(Product<T, T, Box<Mono<T>>, Box<Mono<T>>, T>),
+    Join(Join<T, T, T, Box<Mono<T>>, Box<Mono<T>>, T>),
+    View(View<T, Box<Mono<T>>>),
+}
+
+impl<T: Tuple + 'static> Expression<T> for Mono<T> {
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor,
+    {
+        match self {
+            Mono::Full(exp) => exp.visit(visitor),
+            Mono::Empty(exp) => exp.visit(visitor),
+            Mono::Relation(exp) => exp.visit(visitor),
+            Mono::Select(exp) => exp.visit(visitor),
+            Mono::Project(exp) => exp.visit(visitor),
+            Mono::Union(exp) => exp.visit(visitor),
+            Mono::Intersect(exp) => exp.visit(visitor),
+            Mono::Difference(exp) => exp.visit(visitor),
+            Mono::Product(exp) => exp.visit(visitor),
+            Mono::Join(exp) => exp.visit(visitor),
+            Mono::View(exp) => exp.visit(visitor),
+        }
+    }
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    where
+        C: Collector,
+    {
+        match self {
+            Mono::Full(exp) => exp.collect(collector),
+            Mono::Empty(exp) => exp.collect(collector),
+            Mono::Relation(exp) => exp.collect(collector),
+            Mono::Select(exp) => exp.collect(collector),
+            Mono::Project(exp) => exp.collect(collector),
+            Mono::Union(exp) => exp.collect(collector),
+            Mono::Intersect(exp) => exp.collect(collector),
+            Mono::Difference(exp) => exp.collect(collector),
+            Mono::Product(exp) => exp.collect(collector),
+            Mono::Join(exp) => exp.collect(collector),
+            Mono::View(exp) => exp.collect(collector),
+        }
+    }
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    where
+        C: ListCollector,
+    {
+        match self {
+            Mono::Full(exp) => exp.collect_list(collector),
+            Mono::Empty(exp) => exp.collect_list(collector),
+            Mono::Relation(exp) => exp.collect_list(collector),
+            Mono::Select(exp) => exp.collect_list(collector),
+            Mono::Project(exp) => exp.collect_list(collector),
+            Mono::Union(exp) => exp.collect_list(collector),
+            Mono::Intersect(exp) => exp.collect_list(collector),
+            Mono::Difference(exp) => exp.collect_list(collector),
+            Mono::Product(exp) => exp.collect_list(collector),
+            Mono::Join(exp) => exp.collect_list(collector),
+            Mono::View(exp) => exp.collect_list(collector),
+        }
+    }
+}
+
+impl<T: Tuple + 'static> Expression<T> for Box<Mono<T>> {
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor,
+    {
+        (**self).visit(visitor)
+    }
+    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    where
+        C: Collector,
+    {
+        (**self).collect(collector)
+    }
+    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    where
+        C: ListCollector,
+    {
+        (**self).collect_list(collector)
+    }
+}
