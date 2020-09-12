@@ -65,7 +65,7 @@ mod tests {
     fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r").unwrap();
-        let v = database.store_view(&r).clone();
+        let v = database.store_view(&r).unwrap().clone();
         database.insert(&r, vec![1, 2, 3].into()).unwrap();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 2, 3]),

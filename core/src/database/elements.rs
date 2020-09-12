@@ -1,7 +1,7 @@
 use super::{RelationRef, ViewRef};
 use crate::{expression::Visitor, Tuple};
 
-pub struct Elements {
+pub(super) struct Elements {
     relations: Vec<RelationRef>,
     views: Vec<ViewRef>,
 }

@@ -161,13 +161,13 @@ mod tests {
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database}.unwrap();
-            let v = relalg! { create view as (select * from (r)) in database};
+            let v = relalg! { create view as (select * from (r)) in database}.unwrap();
             assert!(database.evaluate(&v).is_ok());
         }
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database}.unwrap();
-            let v = relalg! { create view as (select [|&x| x > 0] from (r)) in database};
+            let v = relalg! { create view as (select [|&x| x > 0] from (r)) in database}.unwrap();
             assert!(database.evaluate(&v).is_ok());
         }
         {
@@ -359,7 +359,7 @@ mod tests {
         {
             let mut database = Database::new();
             let r = relalg! { create relation "r":[i32] in database}.unwrap();
-            let v = relalg! { create view as (select * from (r)) in database};
+            let v = relalg! { create view as (select * from (r)) in database}.unwrap();
             let exp = relexp!(select * from(v));
             relalg! (insert into (r) values [1, 2, 3, 4] in database).unwrap();
             let result = database.evaluate(&exp).unwrap();
