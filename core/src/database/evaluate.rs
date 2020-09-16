@@ -1222,6 +1222,17 @@ mod tests {
         }
         {
             let mut database = Database::new();
+            let r = database.add_relation("r").unwrap();
+            let s = database.add_relation("s").unwrap();
+            database.insert(&r, vec![vec![1], vec![2]].into()).unwrap();
+            database.insert(&s, vec![vec![1]].into()).unwrap();
+            let u = Difference::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::from(vec![vec![2]]), result);
+        }
+        {
+            let mut database = Database::new();
             let r = database.add_relation::<i32>("r").unwrap();
             let s = database.add_relation::<i32>("s").unwrap();
             database.insert(&s, vec![4, 5].into()).unwrap();

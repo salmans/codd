@@ -102,6 +102,10 @@ pub(crate) fn diff_helper<T: Tuple>(left: &Tuples<T>, right: &Vec<Tuples<T>>, re
         for i in 0..right.len() {
             use std::cmp::Ordering;
 
+            if right[i].is_empty() {
+                continue;
+            }
+
             match tuple.cmp(&right[i][0]) {
                 Ordering::Less => {}
                 Ordering::Equal => {
