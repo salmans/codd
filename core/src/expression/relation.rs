@@ -21,6 +21,10 @@ where
             _phantom: PhantomData,
         }
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl<T> Expression<T> for Relation<T>
