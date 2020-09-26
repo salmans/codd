@@ -117,7 +117,7 @@ impl<'d> Collector for Incremental<'d> {
         let right_stable = difference.right().collect_list(&incremental)?;
 
         for batch in left_stable.iter() {
-            diff_helper(&batch, &right_stable, &mut result)
+            diff_helper(&batch, &right_stable, &mut result);
         }
 
         diff_helper(&left_recent, &right_stable, &mut result);
@@ -1230,6 +1230,17 @@ mod tests {
 
             let result = database.evaluate(&u).unwrap();
             assert_eq!(Tuples::from(vec![vec![2]]), result);
+        }
+        {
+            let mut database = Database::new();
+            let r = database.add_relation("r").unwrap();
+            let s = database.add_relation("s").unwrap();
+            database.insert(&r, vec![2].into()).unwrap();
+            database.insert(&s, vec![1, 2].into()).unwrap();
+            let u = Difference::new(&r, &s);
+
+            let result = database.evaluate(&u).unwrap();
+            assert_eq!(Tuples::from(vec![]), result);
         }
         {
             let mut database = Database::new();

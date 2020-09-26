@@ -98,27 +98,28 @@ pub(crate) fn diff_helper<T: Tuple>(left: &Tuples<T>, right: &Vec<Tuples<T>>, re
     let mut right = right.iter().map(|sl| &sl[..]).collect::<Vec<&[T]>>();
 
     for tuple in left {
-        let mut add = true;
+        let mut to_add = true;
         for i in 0..right.len() {
             use std::cmp::Ordering;
 
-            if right[i].is_empty() {
-                continue;
-            }
-
-            match tuple.cmp(&right[i][0]) {
-                Ordering::Less => {}
-                Ordering::Equal => {
-                    right[i] = &right[i][1..];
-                    add = false;
-                }
-                Ordering::Greater => {
-                    right[i] = &gallop(right[i], |x| x < &tuple);
+            if !right[i].is_empty() {
+                match tuple.cmp(&right[i][0]) {
+                    Ordering::Less => {}
+                    Ordering::Equal => {
+                        right[i] = &right[i][1..];
+                        to_add = false;
+                    }
+                    Ordering::Greater => {
+                        right[i] = &gallop(right[i], |x| x < &tuple);
+                        if !right[i].is_empty() && tuple == &right[i][0] {
+                            to_add = false;
+                        }
+                    }
                 }
             }
         }
 
-        if add {
+        if to_add {
             result.push(tuple.clone());
         }
     }
