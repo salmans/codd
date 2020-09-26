@@ -6,7 +6,7 @@ use crate::{
 };
 use std::marker::PhantomData;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct View<T, E>
 where
     T: Tuple,

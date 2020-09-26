@@ -1,6 +1,6 @@
 use super::{Expression, Visitor};
 use crate::{database::Tuples, expression::Error, Tuple};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 #[derive(Clone)]
 pub struct Join<K, L, R, Left, Right, T>
@@ -93,6 +93,38 @@ where
         C: super::ListCollector,
     {
         collector.collect_join(&self)
+    }
+}
+
+#[derive(Debug)]
+struct Debuggable<L, R, Left, Right>
+where
+    L: Tuple,
+    R: Tuple,
+    Left: Expression<L>,
+    Right: Expression<R>,
+{
+    left: Left,
+    right: Right,
+    _marker: PhantomData<(L, R)>,
+}
+
+impl<K, L, R, Left, Right, T> std::fmt::Debug for Join<K, L, R, Left, Right, T>
+where
+    K: Tuple,
+    L: Tuple,
+    R: Tuple,
+    T: Tuple,
+    Left: Expression<L>,
+    Right: Expression<R>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debuggable {
+            left: self.left.clone(),
+            right: self.right.clone(),
+            _marker: PhantomData,
+        }
+        .fmt(f)
     }
 }
 

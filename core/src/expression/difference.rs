@@ -2,7 +2,7 @@ use super::{Collector, Expression, ListCollector, Visitor};
 use crate::{Error, Tuple, Tuples};
 use std::marker::PhantomData;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Difference<T, L, R>
 where
     T: Tuple,

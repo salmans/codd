@@ -1,8 +1,8 @@
 use super::Expression;
 use crate::{Error, Tuple};
 
-#[derive(Clone)]
-pub struct Singleton<T>(pub(crate) T)
+#[derive(Clone, Debug)]
+pub struct Singleton<T>(pub T)
 where
     T: Tuple;
 

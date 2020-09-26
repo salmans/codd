@@ -1,6 +1,6 @@
 use super::{Expression, Visitor};
 use crate::{database::Tuples, expression::Error, Tuple};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 #[derive(Clone)]
 pub struct Project<S, T, E>
@@ -60,6 +60,31 @@ where
         C: super::ListCollector,
     {
         collector.collect_project(&self)
+    }
+}
+
+#[derive(Debug)]
+struct Debuggable<S, E>
+where
+    S: Tuple,
+    E: Expression<S>,
+{
+    expression: E,
+    _marker: PhantomData<S>,
+}
+
+impl<S, T, E> std::fmt::Debug for Project<S, T, E>
+where
+    S: Tuple,
+    T: Tuple,
+    E: Expression<S>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debuggable {
+            expression: self.expression.clone(),
+            _marker: PhantomData,
+        }
+        .fmt(f)
     }
 }
 
