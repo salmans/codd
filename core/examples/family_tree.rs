@@ -1,6 +1,6 @@
 use relalg::{relalg, Database, Error};
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct Person {
     id: u32,
     father_id: Option<u32>,

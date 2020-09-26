@@ -2,7 +2,7 @@ use super::{Expression, Visitor};
 use crate::{database::Tuples, expression::Error, Tuple};
 use std::marker::PhantomData;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Relation<T>
 where
     T: Tuple,
@@ -20,6 +20,10 @@ where
             name: name.to_string(),
             _phantom: PhantomData,
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 

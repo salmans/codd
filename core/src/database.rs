@@ -263,24 +263,6 @@ impl Database {
         }
     }
 
-    pub fn duplicate(&self) -> Self {
-        let mut relations = HashMap::new();
-        let mut views = HashMap::new();
-
-        self.relations.iter().for_each(|(k, v)| {
-            relations.insert(k.clone(), v.duplicate());
-        });
-        self.views.iter().for_each(|(k, v)| {
-            views.insert(k.clone(), v.duplicate());
-        });
-
-        Self {
-            relations,
-            views,
-            view_counter: self.view_counter,
-        }
-    }
-
     pub fn evaluate<T, E>(&self, expression: &E) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
@@ -420,6 +402,26 @@ impl Database {
         }
 
         Ok(())
+    }
+}
+
+impl Clone for Database {
+    fn clone(&self) -> Self {
+        let mut relations = HashMap::new();
+        let mut views = HashMap::new();
+
+        self.relations.iter().for_each(|(k, v)| {
+            relations.insert(k.clone(), v.duplicate());
+        });
+        self.views.iter().for_each(|(k, v)| {
+            views.insert(k.clone(), v.duplicate());
+        });
+
+        Self {
+            relations,
+            views,
+            view_counter: self.view_counter,
+        }
     }
 }
 
@@ -630,10 +632,10 @@ mod tests {
     }
 
     #[test]
-    fn test_database_duplicate() {
+    fn test_clone_database() {
         {
             let database = Database::new();
-            let cloned = database.duplicate();
+            let cloned = database.clone();
             assert!(cloned.relations.is_empty());
             assert!(cloned.views.is_empty());
             assert_eq!(0, cloned.view_counter);
@@ -677,7 +679,7 @@ mod tests {
                 view_counter: 1,
             };
 
-            let cloned = database.duplicate();
+            let cloned = database.clone();
             assert_eq!(2, cloned.relations.len());
             assert_eq!(1, cloned.views.len());
             assert_eq!(1, cloned.view_counter);

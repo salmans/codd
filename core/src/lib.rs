@@ -9,8 +9,8 @@ pub use expression::{
 };
 use thiserror::Error;
 
-pub trait Tuple: Ord + Clone {}
-impl<T: Ord + Clone> Tuple for T {}
+pub trait Tuple: Ord + Clone + std::fmt::Debug {}
+impl<T: Ord + Clone + std::fmt::Debug> Tuple for T {}
 
 #[derive(Error, Debug)]
 pub enum Error {

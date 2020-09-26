@@ -1,6 +1,6 @@
 use super::{Expression, Visitor};
 use crate::{expression::Error, Tuple, Tuples};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 #[derive(Clone)]
 pub struct Select<T, E>
@@ -60,6 +60,30 @@ where
         C: super::ListCollector,
     {
         collector.collect_select(&self)
+    }
+}
+
+#[derive(Debug)]
+struct Debuggable<T, E>
+where
+    T: Tuple,
+    E: Expression<T>,
+{
+    expression: E,
+    _marker: PhantomData<T>,
+}
+
+impl<T, E> std::fmt::Debug for Select<T, E>
+where
+    T: Tuple,
+    E: Expression<T>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debuggable {
+            expression: self.expression.clone(),
+            _marker: PhantomData,
+        }
+        .fmt(f)
     }
 }
 

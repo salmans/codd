@@ -2,7 +2,7 @@ use super::{Expression, Visitor};
 use crate::{database::Tuples, expression::Error, Tuple};
 use std::marker::PhantomData;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Empty<T>
 where
     T: Tuple,

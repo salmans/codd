@@ -27,7 +27,7 @@ pub use singleton::Singleton;
 pub use union::Union;
 pub use view::View;
 
-pub trait Expression<T: Tuple>: Clone {
+pub trait Expression<T: Tuple>: Clone + std::fmt::Debug {
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor;
@@ -430,10 +430,11 @@ pub trait ListCollector {
         E: Expression<T> + 'static;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Mono<T: Tuple + 'static> {
     Full(Full<T>),
     Empty(Empty<T>),
+    Singleton(Singleton<T>),
     Relation(Relation<T>),
     Select(Select<T, Box<Mono<T>>>),
     Project(Project<T, T, Box<Mono<T>>>),
@@ -453,6 +454,7 @@ impl<T: Tuple + 'static> Expression<T> for Mono<T> {
         match self {
             Mono::Full(exp) => exp.visit(visitor),
             Mono::Empty(exp) => exp.visit(visitor),
+            Mono::Singleton(exp) => exp.visit(visitor),
             Mono::Relation(exp) => exp.visit(visitor),
             Mono::Select(exp) => exp.visit(visitor),
             Mono::Project(exp) => exp.visit(visitor),
@@ -471,6 +473,7 @@ impl<T: Tuple + 'static> Expression<T> for Mono<T> {
         match self {
             Mono::Full(exp) => exp.collect(collector),
             Mono::Empty(exp) => exp.collect(collector),
+            Mono::Singleton(exp) => exp.collect(collector),
             Mono::Relation(exp) => exp.collect(collector),
             Mono::Select(exp) => exp.collect(collector),
             Mono::Project(exp) => exp.collect(collector),
@@ -489,6 +492,7 @@ impl<T: Tuple + 'static> Expression<T> for Mono<T> {
         match self {
             Mono::Full(exp) => exp.collect_list(collector),
             Mono::Empty(exp) => exp.collect_list(collector),
+            Mono::Singleton(exp) => exp.collect_list(collector),
             Mono::Relation(exp) => exp.collect_list(collector),
             Mono::Select(exp) => exp.collect_list(collector),
             Mono::Project(exp) => exp.collect_list(collector),
