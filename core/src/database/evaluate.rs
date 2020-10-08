@@ -1444,5 +1444,50 @@ mod tests {
             let rs_t = Join::new(&rs, &t, |t| t.0, |t| t.0, |_, &l, &r| l.1 * r.1);
             assert!(database.store_view(&rs_t).is_err());
         }
+        {
+            // Test new view initialization after a refering relation is already stable:
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r").unwrap();
+            let v1 = database.store_view(&r).unwrap();
+            database.insert(&r, vec![1, 2, 3].into()).unwrap();
+            let _ = database.evaluate(&v1).unwrap();
+
+            let v2 = database.store_view(&r).unwrap();
+            let result = database.evaluate(&v2).unwrap();
+            assert_eq!(vec![1, 2, 3], result.into_tuples());
+        }
+        {
+            // Do not recalculate an instance in the same update cycle:
+            //   If `r` is recalculated twice (because of dependency from `v2`),
+            //   it will lose its recent tuples, so `v3` will be empty.
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r").unwrap();
+            let v1 = database.store_view(&r).unwrap();
+            let r_v1 = Join::new(&r, &v1, |&t| t, |&t| t, |_, &l, &r| l + r);
+            let v2 = database.store_view(&r_v1).unwrap();
+            let v3 = database.store_view(&r).unwrap();
+            database.insert(&r, vec![1, 2].into()).unwrap();
+
+            assert_eq!(vec![1, 2], database.evaluate(&v1).unwrap().into_tuples());
+            assert_eq!(vec![2, 4], database.evaluate(&v2).unwrap().into_tuples());
+            assert_eq!(vec![1, 2], database.evaluate(&v3).unwrap().into_tuples());
+        }
+        {
+            // Do not recalculate a view in the same update cycle:
+            //   If `u` is recalculated twice (because of dependency from `v2`),
+            //   it will lose its recent tuples, so `v3` will be empty.
+            let mut database = Database::new();
+            let r = database.add_relation::<i32>("r").unwrap();
+            let u = database.store_view(&r).unwrap();
+            let v1 = database.store_view(&u).unwrap();
+            let u_v1 = Join::new(&u, &v1, |&t| t, |&t| t, |_, &l, &r| l + r);
+            let v2 = database.store_view(&u_v1).unwrap();
+            let v3 = database.store_view(&u).unwrap();
+            database.insert(&r, vec![1, 2].into()).unwrap();
+
+            assert_eq!(vec![1, 2], database.evaluate(&v1).unwrap().into_tuples());
+            assert_eq!(vec![2, 4], database.evaluate(&v2).unwrap().into_tuples());
+            assert_eq!(vec![1, 2], database.evaluate(&v3).unwrap().into_tuples());
+        }
     }
 }
