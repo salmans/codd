@@ -8,11 +8,17 @@ use crate::{
     Error, Tuple,
 };
 use helpers::gallop;
-use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
+use std::{
+    any::Any,
+    cell::{Cell, RefCell},
+    collections::{HashMap, HashSet},
+    ops::Deref,
+    rc::Rc,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tuples<T: Tuple> {
-    pub items: Vec<T>,
+    items: Vec<T>,
 }
 
 impl<T: Tuple, I: IntoIterator<Item = T>> From<I> for Tuples<T> {
@@ -30,6 +36,11 @@ impl<T: Tuple> Tuples<T> {
         tuples.extend(self.items.into_iter());
         tuples.extend(other.items.into_iter());
         tuples.into()
+    }
+
+    #[inline]
+    pub fn into_tuples(self) -> Vec<T> {
+        self.items
     }
 }
 
@@ -49,7 +60,7 @@ trait InstanceExt {
     fn duplicate(&self) -> Box<dyn InstanceExt>;
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 struct Instance<T: Tuple> {
     stable: Rc<RefCell<Vec<Tuples<T>>>>,
     recent: Rc<RefCell<Tuples<T>>>,
@@ -68,6 +79,16 @@ impl<T: Tuple> Instance<T> {
     fn insert(&self, tuples: Tuples<T>) {
         if !tuples.is_empty() {
             self.to_add.borrow_mut().push(tuples);
+        }
+    }
+}
+
+impl<T: Tuple> Clone for Instance<T> {
+    fn clone(&self) -> Self {
+        Self {
+            stable: Rc::new(RefCell::new(self.stable.borrow().clone())),
+            recent: Rc::new(RefCell::new(self.recent.borrow().clone())),
+            to_add: Rc::new(RefCell::new(self.to_add.borrow().clone())),
         }
     }
 }
@@ -143,6 +164,8 @@ trait MaterializedViewExt {
 
     fn instance(&self) -> &dyn InstanceExt;
 
+    fn initialize(&self, db: &Database) -> Result<(), Error>;
+
     fn recalculate(&self, db: &Database) -> Result<(), Error>;
 
     fn duplicate(&self) -> Box<dyn MaterializedViewExt>;
@@ -170,9 +193,20 @@ where
         &self.instance
     }
 
+    fn initialize(&self, db: &Database) -> Result<(), Error> {
+        let incremental = evaluate::Incremental(db);
+        let stable = self.expression.collect_list(&incremental)?;
+
+        for batch in stable {
+            self.instance.insert(batch);
+        }
+        Ok(())
+    }
+
     fn recalculate(&self, db: &Database) -> Result<(), Error> {
-        let recent = evaluate::Incremental(db);
-        let recent = self.expression.collect(&recent)?;
+        let incremental = evaluate::Incremental(db);
+        let recent = self.expression.collect(&incremental)?;
+
         self.instance.insert(recent);
         Ok(())
     }
@@ -187,9 +221,10 @@ where
 
 struct ViewEntry {
     instance: Box<dyn MaterializedViewExt>,
-    up_view_refs: Vec<ViewRef>,
-    up_relation_refs: Vec<RelationRef>,
-    down_refs: Vec<ViewRef>,
+    up_view_refs: HashSet<ViewRef>,
+    up_relation_refs: HashSet<RelationRef>,
+    down_refs: HashSet<ViewRef>,
+    recalculating: Cell<bool>,
 }
 
 impl ViewEntry {
@@ -200,14 +235,15 @@ impl ViewEntry {
     {
         Self {
             instance: Box::new(view),
-            up_view_refs: Vec::new(),
-            up_relation_refs: Vec::new(),
-            down_refs: Vec::new(),
+            up_view_refs: HashSet::new(),
+            up_relation_refs: HashSet::new(),
+            down_refs: HashSet::new(),
+            recalculating: Cell::new(false),
         }
     }
 
     fn add_view_ref(&mut self, v: ViewRef) {
-        self.down_refs.push(v)
+        self.down_refs.insert(v);
     }
 
     fn duplicate(&self) -> Self {
@@ -216,13 +252,15 @@ impl ViewEntry {
             up_view_refs: self.up_view_refs.clone(),
             up_relation_refs: self.up_relation_refs.clone(),
             down_refs: self.down_refs.clone(),
+            recalculating: self.recalculating.clone(),
         }
     }
 }
 
 struct RelationEntry {
     instance: Box<dyn InstanceExt>,
-    down_refs: Vec<ViewRef>,
+    down_refs: HashSet<ViewRef>,
+    recalculating: Cell<bool>,
 }
 
 impl RelationEntry {
@@ -232,18 +270,20 @@ impl RelationEntry {
     {
         Self {
             instance: Box::new(view),
-            down_refs: Vec::new(),
+            down_refs: HashSet::new(),
+            recalculating: Cell::new(false),
         }
     }
 
     fn add_view_ref(&mut self, v: ViewRef) {
-        self.down_refs.push(v)
+        self.down_refs.insert(v);
     }
 
     fn duplicate(&self) -> Self {
         Self {
             instance: self.instance.duplicate(),
             down_refs: self.down_refs.clone(),
+            recalculating: self.recalculating.clone(),
         }
     }
 }
@@ -337,20 +377,22 @@ impl Database {
         let reference = ViewRef(self.view_counter);
 
         for r in elements.relations().iter() {
-            entry.up_relation_refs.push(r.clone());
+            entry.up_relation_refs.insert(r.clone());
             self.relations
                 .get_mut(r)
                 .map(|rs| rs.add_view_ref(reference.clone()));
         }
 
         for r in elements.views().iter() {
-            entry.up_view_refs.push(r.clone());
+            entry.up_view_refs.insert(r.clone());
             self.views
                 .get_mut(r)
                 .map(|rs| rs.add_view_ref(reference.clone()));
         }
-        self.views.insert(reference.clone(), entry);
 
+        entry.instance.initialize(self)?;
+
+        self.views.insert(reference.clone(), entry);
         self.view_counter += 1;
 
         Ok(View::new(reference))
@@ -373,6 +415,12 @@ impl Database {
 
     fn recalculate_view(&self, view_ref: &ViewRef) -> Result<(), Error> {
         if let Some(entry) = self.views.get(view_ref) {
+            if entry.recalculating.get() {
+                return Ok(());
+            }
+
+            entry.recalculating.set(true);
+
             for r in entry.up_relation_refs.iter() {
                 self.recalculate_relation(r)?;
             }
@@ -386,6 +434,8 @@ impl Database {
                     self.recalculate_view(r)?;
                 }
             }
+
+            entry.recalculating.set(false);
         }
 
         Ok(())
@@ -393,12 +443,20 @@ impl Database {
 
     fn recalculate_relation(&self, relation_ref: &RelationRef) -> Result<(), Error> {
         if let Some(entry) = self.relations.get(relation_ref) {
+            if entry.recalculating.get() {
+                return Ok(());
+            }
+
+            entry.recalculating.set(true);
+
             while entry.instance.changed() {
                 for r in entry.down_refs.iter() {
                     self.views.get(r).unwrap().instance.recalculate(&self)?;
                     self.recalculate_view(r)?;
                 }
             }
+
+            entry.recalculating.set(false);
         }
 
         Ok(())
@@ -640,7 +698,6 @@ mod tests {
             assert!(cloned.views.is_empty());
             assert_eq!(0, cloned.view_counter);
         }
-
         {
             let mut relations: HashMap<String, RelationEntry> = HashMap::new();
             relations.insert(
@@ -699,6 +756,28 @@ mod tests {
                     .clone()
             );
         }
+        {
+            let mut database = Database::new();
+            let a = database.add_relation::<i32>("a").unwrap();
+            let v = database.store_view(&a).unwrap();
+            database.insert(&a, vec![1, 2, 3].into()).unwrap();
+
+            let cloned = database.clone();
+            database.insert(&a, vec![1, 4].into()).unwrap();
+
+            assert_eq!(
+                vec![1, 2, 3, 4],
+                database.evaluate(&v).unwrap().into_tuples()
+            );
+            assert_eq!(vec![1, 2, 3], cloned.evaluate(&v).unwrap().into_tuples());
+
+            cloned.insert(&a, vec![1, 5].into()).unwrap();
+            assert_eq!(
+                vec![1, 2, 3, 4],
+                database.evaluate(&v).unwrap().into_tuples()
+            );
+            assert_eq!(vec![1, 2, 3, 5], cloned.evaluate(&v).unwrap().into_tuples());
+        }
     }
 
     #[test]
@@ -725,15 +804,47 @@ mod tests {
     fn test_store_view() {
         {
             let mut database = Database::new();
+            let a = database.add_relation::<i32>("a").unwrap();
+            database.store_view(&a).unwrap();
+            assert!(database.views.get(&ViewRef(0)).is_some());
+            assert!(database.views.get(&ViewRef(1000)).is_none());
+        }
+        {
+            let mut database = Database::new();
+            let _ = database.add_relation::<i32>("a").unwrap();
             database.store_view(&Relation::<i32>::new("a")).unwrap();
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
         }
+        {
+            let mut database = Database::new();
+            assert!(database.store_view(&Relation::<i32>::new("a")).is_err());
+        }
 
         {
             let mut database = Database::new();
+            let a = database.add_relation::<i32>("a").unwrap();
+            database.store_view(&Select::new(&a, |&t| t != 0)).unwrap();
+
+            assert!(database.views.get(&ViewRef(0)).is_some());
+            assert!(database.views.get(&ViewRef(1000)).is_none());
+        }
+
+        {
+            let mut database = Database::new();
+            let a = database.add_relation::<i32>("a").unwrap();
+            database.store_view(&Project::new(&a, |t| t + 1)).unwrap();
+
+            assert!(database.views.get(&ViewRef(0)).is_some());
+            assert!(database.views.get(&ViewRef(1000)).is_none());
+        }
+
+        {
+            let mut database = Database::new();
+            let a = database.add_relation::<(i32, i32)>("a").unwrap();
+            let b = database.add_relation::<(i32, i32)>("b").unwrap();
             database
-                .store_view(&Select::new(&Relation::<i32>::new("a"), |&t| t != 0))
+                .store_view(&Join::new(&a, &b, |t| t.0, |t| t.0, |_, &l, &r| (l, r)))
                 .unwrap();
 
             assert!(database.views.get(&ViewRef(0)).is_some());
@@ -742,33 +853,8 @@ mod tests {
 
         {
             let mut database = Database::new();
-            database
-                .store_view(&Project::new(&Relation::<i32>::new("a"), |t| t + 1))
-                .unwrap();
-
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
-        }
-
-        {
-            let mut database = Database::new();
-            database
-                .store_view(&Join::new(
-                    &Relation::<(i32, i32)>::new("a"),
-                    &Relation::<(i32, i32)>::new("b"),
-                    |t| t.0,
-                    |t| t.0,
-                    |_, &l, &r| (l, r),
-                ))
-                .unwrap();
-
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
-        }
-
-        {
-            let mut database = Database::new();
-            let view = database.store_view(&Relation::<i32>::new("a")).unwrap();
+            let a = database.add_relation::<i32>("a").unwrap();
+            let view = database.store_view(&a).unwrap();
             database.store_view(&view).unwrap();
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1)).is_some());
@@ -779,16 +865,10 @@ mod tests {
     #[test]
     fn test_get_view() {
         let mut database = Database::new();
-        let mut dummy = Database::new();
-        let view_i32 = database.store_view(&Relation::<i32>::new("a")).unwrap();
-        let view_string_1 = dummy.store_view(&Relation::<String>::new("a")).unwrap();
+        let _ = database.add_relation::<i32>("a").unwrap();
+        let view = database.store_view(&Relation::<i32>::new("a")).unwrap();
 
-        assert!(database.view_instance(&view_i32).is_ok());
-        assert!(database.view_instance(&view_string_1).is_err());
-
-        let view_string_2 = database.store_view(&Relation::<String>::new("a")).unwrap();
-        assert!(database.view_instance(&view_string_1).is_err());
-        assert!(database.view_instance(&view_string_2).is_ok());
+        assert!(database.view_instance(&view).is_ok());
     }
 
     #[test]
