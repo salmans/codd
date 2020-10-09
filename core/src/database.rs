@@ -52,6 +52,12 @@ impl<T: Tuple> Deref for Tuples<T> {
     }
 }
 
+impl<T: Tuple> core::ops::DerefMut for Tuples<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.items
+    }
+}
+
 trait InstanceExt {
     fn as_any(&self) -> &dyn Any;
 
