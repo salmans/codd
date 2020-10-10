@@ -1,4 +1,4 @@
-use relalg::{relalg, Database, Error};
+use codd::{relalg, Database, Error};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct Person {
