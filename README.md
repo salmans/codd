@@ -1,2 +1,2 @@
-# relalg
+# codd
 a library for relational algebra
