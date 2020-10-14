@@ -6,7 +6,7 @@ The implementation of database instances in `codd` is borrowed from [`datafrog`]
 * `Instance<T>` (`Variable<T>` in `datafrog`) contains tuples of type `T`,
 * Incremental view maintenance is implemented by maintaining tuples of `Instance<T>` in three sets of `to_add` (candidate tuples to be inserted), `recent` (recently added tuples), and `stable` (old tuples that have been reflected in all views).
 
-Unlike `datafrog`, `codd` distinguishes relation instances from views and offers the trait `Expression<T>` and offers types that implement `Expression<T>` to query the database.
+Unlike `datafrog`, `codd` distinguishes relation instances from views and offers the trait `Expression<T>` and types that implement `Expression<T>` to query the database.
 
 The relational algebra and database terminology in `codd` is adopted from [Alice's book](http://webdam.inria.fr/Alice/).
 
