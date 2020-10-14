@@ -1,7 +1,28 @@
-use super::{Expression, Visitor};
-use crate::{database::Tuples, expression::Error, Tuple};
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use super::{view::ViewRef, Expression, Visitor};
+use crate::Tuple;
+use std::{
+    cell::{RefCell, RefMut},
+    marker::PhantomData,
+    rc::Rc,
+};
 
+/// Corresponds to the cartesian product of two expression.
+///
+/// **Example**:
+/// ```rust
+/// use codd::{Database, Product};
+///
+/// let mut db = Database::new();
+/// let r = db.add_relation::<i32>("R").unwrap();
+/// let s = db.add_relation::<i32>("S").unwrap();
+///
+/// db.insert(&r, vec![0, 1, 2].into());
+/// db.insert(&s, vec![2, 4].into());
+///
+/// let prod = Product::new(&r, &s, |l, r| l*r);
+///
+/// assert_eq!(vec![0, 2, 4, 8], db.evaluate(&prod).unwrap().into_tuples());
+/// ```
 #[derive(Clone)]
 pub struct Product<L, R, Left, Right, T>
 where
@@ -14,6 +35,8 @@ where
     left: Left,
     right: Right,
     mapper: Rc<RefCell<dyn FnMut(&L, &R) -> T>>,
+    relation_deps: Vec<String>,
+    view_deps: Vec<ViewRef>,
 }
 
 impl<L, R, Left, Right, T> Product<L, R, Left, Right, T>
@@ -24,24 +47,53 @@ where
     Left: Expression<L>,
     Right: Expression<R>,
 {
+    /// Creates a `Product` expression over `left` and `right` with `mapper` as the closure
+    /// that produces the tuples of the resulting expression from tuples of `left` and `right`.
     pub fn new(left: &Left, right: &Right, project: impl FnMut(&L, &R) -> T + 'static) -> Self {
+        use super::dependency;
+
+        let mut deps = dependency::DependencyVisitor::new();
+        left.visit(&mut deps);
+        right.visit(&mut deps);
+        let (relation_deps, view_deps) = deps.into_dependencies();
+
         Self {
             left: left.clone(),
             right: right.clone(),
             mapper: Rc::new(RefCell::new(project)),
+            relation_deps: relation_deps.into_iter().collect(),
+            view_deps: view_deps.into_iter().collect(),
         }
     }
 
-    pub fn left(&self) -> &Left {
+    /// Returns a reference to the expression on left.
+    #[inline(always)]
+    pub(crate) fn left(&self) -> &Left {
         &self.left
     }
 
-    pub fn right(&self) -> &Right {
+    /// Returns a reference to the expression on right.
+    #[inline(always)]
+    pub(crate) fn right(&self) -> &Right {
         &self.right
     }
 
-    pub fn mapper(&self) -> &Rc<RefCell<dyn FnMut(&L, &R) -> T>> {
-        &self.mapper
+    /// Returns a mutable reference (of type `std::cell::RefMut`) to the mapping closure.
+    #[inline(always)]
+    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&L, &R) -> T> {
+        self.mapper.borrow_mut()
+    }
+
+    /// Returns a reference to relation dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn relation_deps(&self) -> &[String] {
+        &self.relation_deps
+    }
+
+    /// Returns a reference to view dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn view_deps(&self) -> &[ViewRef] {
+        &self.view_deps
     }
 }
 
@@ -59,22 +111,9 @@ where
     {
         visitor.visit_product(&self);
     }
-
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: super::Collector,
-    {
-        collector.collect_product(&self)
-    }
-
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: super::ListCollector,
-    {
-        collector.collect_product(&self)
-    }
 }
 
+// A hack for debugging purposes:
 #[derive(Debug)]
 struct Debuggable<L, R, Left, Right>
 where
@@ -109,7 +148,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Database;
+    use crate::{Database, Tuples};
 
     #[test]
     fn test_clone() {

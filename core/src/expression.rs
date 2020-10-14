@@ -1,24 +1,31 @@
+/*! Defines relational algebraic expressions as generic over [`Tuple`] types and
+can be evaluated in [`Database`].
+
+[`Tuple`]: ../trait.Tuple.html
+[`Database`]: ./database/struct.Database.html
+*/
+pub(crate) mod dependency;
 mod difference;
 mod empty;
 mod full;
 mod intersect;
 mod join;
+mod mono;
 mod product;
 mod project;
 mod relation;
 mod select;
 mod singleton;
 mod union;
-mod view;
+pub(crate) mod view;
 
-use crate::{database::Tuples, Tuple};
-
-use crate::Error;
+use crate::Tuple;
 pub use difference::Difference;
 pub use empty::Empty;
 pub use full::Full;
 pub use intersect::Intersect;
 pub use join::Join;
+pub use mono::Mono;
 pub use product::Product;
 pub use project::Project;
 pub use relation::Relation;
@@ -27,21 +34,23 @@ pub use singleton::Singleton;
 pub use union::Union;
 pub use view::View;
 
+/// Is the trait of expressions in relational algebra that can be evaluated in
+/// a database.
 pub trait Expression<T: Tuple>: Clone + std::fmt::Debug {
+    /// Visits this node by a [`Visitor`].
+    ///
+    /// [`Visitor`]: ./trait.Visitor.html
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor;
-
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: Collector;
-
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: ListCollector;
 }
 
+/// Is the trait of objects that visit [`Expression`]s. The default implementation guides
+/// the visitor through all subexpressions of the expressions that is visited.
+///
+/// [`Expression`]: ./trait.Expression.html
 pub trait Visitor: Sized {
+    /// Visits the `Full` expression.
     fn visit_full<T>(&mut self, full: &Full<T>)
     where
         T: Tuple,
@@ -49,6 +58,7 @@ pub trait Visitor: Sized {
         walk_full(self, full)
     }
 
+    /// Visits the `Empty` expression.
     fn visit_empty<T>(&mut self, empty: &Empty<T>)
     where
         T: Tuple,
@@ -56,6 +66,7 @@ pub trait Visitor: Sized {
         walk_empty(self, empty)
     }
 
+    /// Visits a `Singlenton` expression.
     fn visit_singleton<T>(&mut self, singleton: &Singleton<T>)
     where
         T: Tuple,
@@ -63,6 +74,7 @@ pub trait Visitor: Sized {
         walk_singlenton(self, singleton)
     }
 
+    /// Visits a `Relation` expression.
     fn visit_relation<T>(&mut self, relation: &Relation<T>)
     where
         T: Tuple,
@@ -70,6 +82,7 @@ pub trait Visitor: Sized {
         walk_relation(self, relation)
     }
 
+    /// Visits a `Select` expression.
     fn visit_select<T, E>(&mut self, select: &Select<T, E>)
     where
         T: Tuple,
@@ -78,6 +91,7 @@ pub trait Visitor: Sized {
         walk_select(self, select);
     }
 
+    /// Visits a `Union` expression.    
     fn visit_union<T, L, R>(&mut self, union: &Union<T, L, R>)
     where
         T: Tuple,
@@ -87,6 +101,7 @@ pub trait Visitor: Sized {
         walk_union(self, union);
     }
 
+    /// Visits an `Intersect` expression.    
     fn visit_intersect<T, L, R>(&mut self, intersect: &Intersect<T, L, R>)
     where
         T: Tuple,
@@ -96,6 +111,7 @@ pub trait Visitor: Sized {
         walk_intersect(self, intersect);
     }
 
+    /// Visits a `Difference` expression.    
     fn visit_difference<T, L, R>(&mut self, difference: &Difference<T, L, R>)
     where
         T: Tuple,
@@ -105,6 +121,7 @@ pub trait Visitor: Sized {
         walk_difference(self, difference);
     }
 
+    /// Visits a `Project` expression.    
     fn visit_project<S, T, E>(&mut self, project: &Project<S, T, E>)
     where
         T: Tuple,
@@ -114,6 +131,7 @@ pub trait Visitor: Sized {
         walk_project(self, project);
     }
 
+    /// Visits a `Product` expression.    
     fn visit_product<L, R, Left, Right, T>(&mut self, product: &Product<L, R, Left, Right, T>)
     where
         L: Tuple,
@@ -125,6 +143,7 @@ pub trait Visitor: Sized {
         walk_product(self, product);
     }
 
+    /// Visits a `Join` expression.    
     fn visit_join<K, L, R, Left, Right, T>(&mut self, join: &Join<K, L, R, Left, Right, T>)
     where
         K: Tuple,
@@ -137,6 +156,7 @@ pub trait Visitor: Sized {
         walk_join(self, join);
     }
 
+    /// Visits a `View` expression.    
     fn visit_view<T, E>(&mut self, view: &View<T, E>)
     where
         T: Tuple,
@@ -146,7 +166,7 @@ pub trait Visitor: Sized {
     }
 }
 
-pub fn walk_full<T, V>(_: &mut V, _: &Full<T>)
+fn walk_full<T, V>(_: &mut V, _: &Full<T>)
 where
     T: Tuple,
     V: Visitor,
@@ -154,7 +174,7 @@ where
     // nothing to do
 }
 
-pub fn walk_empty<T, V>(_: &mut V, _: &Empty<T>)
+fn walk_empty<T, V>(_: &mut V, _: &Empty<T>)
 where
     T: Tuple,
     V: Visitor,
@@ -162,7 +182,7 @@ where
     // nothing to do
 }
 
-pub fn walk_singlenton<T, V>(_: &mut V, _: &Singleton<T>)
+fn walk_singlenton<T, V>(_: &mut V, _: &Singleton<T>)
 where
     T: Tuple,
     V: Visitor,
@@ -170,7 +190,7 @@ where
     // nothing to do
 }
 
-pub fn walk_relation<T, V>(_: &mut V, _: &Relation<T>)
+fn walk_relation<T, V>(_: &mut V, _: &Relation<T>)
 where
     T: Tuple,
     V: Visitor,
@@ -178,7 +198,7 @@ where
     // nothing to do
 }
 
-pub fn walk_select<T, E, V>(visitor: &mut V, select: &Select<T, E>)
+fn walk_select<T, E, V>(visitor: &mut V, select: &Select<T, E>)
 where
     T: Tuple,
     E: Expression<T>,
@@ -187,7 +207,7 @@ where
     select.expression().visit(visitor);
 }
 
-pub fn walk_union<T, L, R, V>(visitor: &mut V, union: &Union<T, L, R>)
+fn walk_union<T, L, R, V>(visitor: &mut V, union: &Union<T, L, R>)
 where
     T: Tuple,
     L: Expression<T>,
@@ -198,7 +218,7 @@ where
     union.right().visit(visitor);
 }
 
-pub fn walk_intersect<T, L, R, V>(visitor: &mut V, intersect: &Intersect<T, L, R>)
+fn walk_intersect<T, L, R, V>(visitor: &mut V, intersect: &Intersect<T, L, R>)
 where
     T: Tuple,
     L: Expression<T>,
@@ -209,7 +229,7 @@ where
     intersect.right().visit(visitor);
 }
 
-pub fn walk_difference<T, L, R, V>(visitor: &mut V, difference: &Difference<T, L, R>)
+fn walk_difference<T, L, R, V>(visitor: &mut V, difference: &Difference<T, L, R>)
 where
     T: Tuple,
     L: Expression<T>,
@@ -220,7 +240,7 @@ where
     difference.right().visit(visitor);
 }
 
-pub fn walk_project<S, T, E, V>(visitor: &mut V, project: &Project<S, T, E>)
+fn walk_project<S, T, E, V>(visitor: &mut V, project: &Project<S, T, E>)
 where
     T: Tuple,
     S: Tuple,
@@ -230,10 +250,8 @@ where
     project.expression().visit(visitor);
 }
 
-pub fn walk_product<L, R, Left, Right, T, V>(
-    visitor: &mut V,
-    product: &Product<L, R, Left, Right, T>,
-) where
+fn walk_product<L, R, Left, Right, T, V>(visitor: &mut V, product: &Product<L, R, Left, Right, T>)
+where
     L: Tuple,
     R: Tuple,
     T: Tuple,
@@ -245,7 +263,7 @@ pub fn walk_product<L, R, Left, Right, T, V>(
     product.right().visit(visitor);
 }
 
-pub fn walk_join<K, L, R, Left, Right, T, V>(visitor: &mut V, join: &Join<K, L, R, Left, Right, T>)
+fn walk_join<K, L, R, Left, Right, T, V>(visitor: &mut V, join: &Join<K, L, R, Left, Right, T>)
 where
     K: Tuple,
     L: Tuple,
@@ -259,270 +277,11 @@ where
     join.right().visit(visitor);
 }
 
-pub fn walk_view<T, E, V>(_: &mut V, _: &View<T, E>)
+fn walk_view<T, E, V>(_: &mut V, _: &View<T, E>)
 where
     T: Tuple,
     E: Expression<T>,
     V: Visitor,
 {
     // nothing to do
-}
-
-pub trait Collector {
-    fn collect_full<T>(&self, full: &Full<T>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple;
-
-    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple;
-
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple;
-
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple + 'static;
-
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple,
-        E: Expression<T>;
-
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_intersect<T, L, R>(
-        &self,
-        intersect: &Intersect<T, L, R>,
-    ) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_difference<T, L, R>(
-        &self,
-        difference: &Difference<T, L, R>,
-    ) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple,
-        S: Tuple,
-        E: Expression<S>;
-
-    fn collect_product<L, R, Left, Right, T>(
-        &self,
-        product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>, Error>
-    where
-        L: Tuple,
-        R: Tuple,
-        T: Tuple,
-        Left: Expression<L>,
-        Right: Expression<R>;
-
-    fn collect_join<K, L, R, Left, Right, T>(
-        &self,
-        join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>, Error>
-    where
-        K: Tuple,
-        L: Tuple,
-        R: Tuple,
-        T: Tuple,
-        Left: Expression<L>,
-        Right: Expression<R>;
-
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
-    where
-        T: Tuple + 'static,
-        E: Expression<T> + 'static;
-}
-
-pub trait ListCollector {
-    fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple;
-
-    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple;
-
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple;
-
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple + 'static;
-
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple,
-        E: Expression<T>;
-
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_intersect<T, L, R>(
-        &self,
-        intersect: &Intersect<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_difference<T, L, R>(
-        &self,
-        difference: &Difference<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple,
-        L: Expression<T>,
-        R: Expression<T>;
-
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple,
-        S: Tuple,
-        E: Expression<S>;
-
-    fn collect_product<L, R, Left, Right, T>(
-        &self,
-        product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>, Error>
-    where
-        L: Tuple,
-        R: Tuple,
-        T: Tuple,
-        Left: Expression<L>,
-        Right: Expression<R>;
-
-    fn collect_join<K, L, R, Left, Right, T>(
-        &self,
-        join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>, Error>
-    where
-        K: Tuple,
-        L: Tuple,
-        R: Tuple,
-        T: Tuple,
-        Left: Expression<L>,
-        Right: Expression<R>;
-
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
-    where
-        T: Tuple + 'static,
-        E: Expression<T> + 'static;
-}
-
-#[derive(Clone, Debug)]
-pub enum Mono<T: Tuple + 'static> {
-    Full(Full<T>),
-    Empty(Empty<T>),
-    Singleton(Singleton<T>),
-    Relation(Relation<T>),
-    Select(Select<T, Box<Mono<T>>>),
-    Project(Project<T, T, Box<Mono<T>>>),
-    Union(Union<T, Box<Mono<T>>, Box<Mono<T>>>),
-    Intersect(Intersect<T, Box<Mono<T>>, Box<Mono<T>>>),
-    Difference(Difference<T, Box<Mono<T>>, Box<Mono<T>>>),
-    Product(Product<T, T, Box<Mono<T>>, Box<Mono<T>>, T>),
-    Join(Join<T, T, T, Box<Mono<T>>, Box<Mono<T>>, T>),
-    View(View<T, Box<Mono<T>>>),
-}
-
-impl<T: Tuple + 'static> Expression<T> for Mono<T> {
-    fn visit<V>(&self, visitor: &mut V)
-    where
-        V: Visitor,
-    {
-        match self {
-            Mono::Full(exp) => exp.visit(visitor),
-            Mono::Empty(exp) => exp.visit(visitor),
-            Mono::Singleton(exp) => exp.visit(visitor),
-            Mono::Relation(exp) => exp.visit(visitor),
-            Mono::Select(exp) => exp.visit(visitor),
-            Mono::Project(exp) => exp.visit(visitor),
-            Mono::Union(exp) => exp.visit(visitor),
-            Mono::Intersect(exp) => exp.visit(visitor),
-            Mono::Difference(exp) => exp.visit(visitor),
-            Mono::Product(exp) => exp.visit(visitor),
-            Mono::Join(exp) => exp.visit(visitor),
-            Mono::View(exp) => exp.visit(visitor),
-        }
-    }
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: Collector,
-    {
-        match self {
-            Mono::Full(exp) => exp.collect(collector),
-            Mono::Empty(exp) => exp.collect(collector),
-            Mono::Singleton(exp) => exp.collect(collector),
-            Mono::Relation(exp) => exp.collect(collector),
-            Mono::Select(exp) => exp.collect(collector),
-            Mono::Project(exp) => exp.collect(collector),
-            Mono::Union(exp) => exp.collect(collector),
-            Mono::Intersect(exp) => exp.collect(collector),
-            Mono::Difference(exp) => exp.collect(collector),
-            Mono::Product(exp) => exp.collect(collector),
-            Mono::Join(exp) => exp.collect(collector),
-            Mono::View(exp) => exp.collect(collector),
-        }
-    }
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: ListCollector,
-    {
-        match self {
-            Mono::Full(exp) => exp.collect_list(collector),
-            Mono::Empty(exp) => exp.collect_list(collector),
-            Mono::Singleton(exp) => exp.collect_list(collector),
-            Mono::Relation(exp) => exp.collect_list(collector),
-            Mono::Select(exp) => exp.collect_list(collector),
-            Mono::Project(exp) => exp.collect_list(collector),
-            Mono::Union(exp) => exp.collect_list(collector),
-            Mono::Intersect(exp) => exp.collect_list(collector),
-            Mono::Difference(exp) => exp.collect_list(collector),
-            Mono::Product(exp) => exp.collect_list(collector),
-            Mono::Join(exp) => exp.collect_list(collector),
-            Mono::View(exp) => exp.collect_list(collector),
-        }
-    }
-}
-
-impl<T: Tuple + 'static> Expression<T> for Box<Mono<T>> {
-    fn visit<V>(&self, visitor: &mut V)
-    where
-        V: Visitor,
-    {
-        (**self).visit(visitor)
-    }
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: Collector,
-    {
-        (**self).collect(collector)
-    }
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: ListCollector,
-    {
-        (**self).collect_list(collector)
-    }
 }

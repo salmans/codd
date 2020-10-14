@@ -1,7 +1,39 @@
-use super::{Expression, Visitor};
-use crate::{database::Tuples, expression::Error, Tuple};
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use super::{view::ViewRef, Expression, Visitor};
+use crate::Tuple;
+use std::{
+    cell::{RefCell, RefMut},
+    marker::PhantomData,
+    rc::Rc,
+};
 
+/// Is the join of `left` and `right` expressions.
+///
+/// **Example**:
+/// ```rust
+/// use codd::{Database, Join};
+///
+/// let mut db = Database::new();
+/// let fruit = db.add_relation::<(i32, String)>("R").unwrap();
+/// let numbers = db.add_relation::<i32>("S").unwrap();
+///
+/// db.insert(&fruit, vec![
+///    (0, "Apple".to_string()),
+///    (1, "Banana".to_string()),
+///    (2, "Cherry".to_string())
+/// ].into());
+/// db.insert(&numbers, vec![0, 2].into());
+///
+/// let join = Join::new(
+///     &fruit,
+///     &numbers,
+///     |t| t.0,  // first element of tuples in `r` is the key for join
+///     |&t| t,   // the values in `s` are keys for join
+///     // make resulting values from key `k`, left value `l` and right value `r`:
+///     |k, l, r| format!("{}{}", l.1, k + r)
+/// );
+///
+/// assert_eq!(vec!["Apple0", "Cherry4"], db.evaluate(&join).unwrap().into_tuples());
+/// ```
 #[derive(Clone)]
 pub struct Join<K, L, R, Left, Right, T>
 where
@@ -16,7 +48,9 @@ where
     right: Right,
     left_key: Rc<RefCell<dyn FnMut(&L) -> K>>,
     right_key: Rc<RefCell<dyn FnMut(&R) -> K>>,
-    joiner: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
+    mapper: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
+    relation_deps: Vec<String>,
+    view_deps: Vec<ViewRef>,
 }
 
 impl<K, L, R, Left, Right, T> Join<K, L, R, Left, Right, T>
@@ -28,40 +62,78 @@ where
     Left: Expression<L>,
     Right: Expression<R>,
 {
+    /// Creates a new `Join` expression over `left` and `right` where `left_key`
+    /// and `right_key` are closures that return the join key for tuples of
+    /// `left` and `right` respectively. The closure `mapper` computes the tuples
+    /// of the resulting expression from the join keys and the tuples of `left` and
+    /// `right`.
     pub fn new(
         left: &Left,
         right: &Right,
         left_key: impl FnMut(&L) -> K + 'static,
         right_key: impl FnMut(&R) -> K + 'static,
-        joiner: impl FnMut(&K, &L, &R) -> T + 'static,
+        mapper: impl FnMut(&K, &L, &R) -> T + 'static,
     ) -> Self {
+        use super::dependency;
+
+        let mut deps = dependency::DependencyVisitor::new();
+        left.visit(&mut deps);
+        right.visit(&mut deps);
+        let (relation_deps, view_deps) = deps.into_dependencies();
+
         Self {
             left: left.clone(),
             right: right.clone(),
             left_key: Rc::new(RefCell::new(left_key)),
             right_key: Rc::new(RefCell::new(right_key)),
-            joiner: Rc::new(RefCell::new(joiner)),
+            mapper: Rc::new(RefCell::new(mapper)),
+            relation_deps: relation_deps.into_iter().collect(),
+            view_deps: view_deps.into_iter().collect(),
         }
     }
 
+    /// Returns a reference to the expression on left.
+    #[inline(always)]
     pub fn left(&self) -> &Left {
         &self.left
     }
 
+    /// Returns a reference to the expression on right.
+    #[inline(always)]
     pub fn right(&self) -> &Right {
         &self.right
     }
 
-    pub fn left_key(&self) -> &Rc<RefCell<dyn FnMut(&L) -> K>> {
-        &self.left_key
+    /// Returns a mutable reference (of type `RefMut`) of the key closure for
+    /// the left expression.
+    #[inline(always)]
+    pub(crate) fn left_key_mut(&self) -> RefMut<dyn FnMut(&L) -> K> {
+        self.left_key.borrow_mut()
     }
 
-    pub fn right_key(&self) -> &Rc<RefCell<dyn FnMut(&R) -> K>> {
-        &self.right_key
+    /// Returns a mutable reference (of type `RefMut`) of the key closure for
+    /// the right expression.
+    #[inline(always)]
+    pub(crate) fn right_key_mut(&self) -> RefMut<dyn FnMut(&R) -> K> {
+        self.right_key.borrow_mut()
     }
 
-    pub fn mapper(&self) -> &Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>> {
-        &self.joiner
+    /// Returns a mutable reference (of type `std::cell::RefMut`) to the joining closure.
+    #[inline(always)]
+    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&K, &L, &R) -> T> {
+        self.mapper.borrow_mut()
+    }
+
+    /// Returns a reference to relation dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn relation_deps(&self) -> &[String] {
+        &self.relation_deps
+    }
+
+    /// Returns a reference to view dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn view_deps(&self) -> &[ViewRef] {
+        &self.view_deps
     }
 }
 
@@ -80,22 +152,9 @@ where
     {
         visitor.visit_join(&self);
     }
-
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: super::Collector,
-    {
-        collector.collect_join(&self)
-    }
-
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: super::ListCollector,
-    {
-        collector.collect_join(&self)
-    }
 }
 
+// A hack for debugging purposes:
 #[derive(Debug)]
 struct Debuggable<L, R, Left, Right>
 where
@@ -131,7 +190,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Database;
+    use crate::{Database, Tuples};
 
     #[test]
     fn test_clone() {

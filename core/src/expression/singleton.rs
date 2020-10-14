@@ -1,10 +1,40 @@
 use super::Expression;
-use crate::{Error, Tuple};
+use crate::Tuple;
 
+/// Represents a single tuple of type `T`.
+///
+/// **Example**:
+/// ```rust
+/// use codd::{Database, Singleton};
+///
+/// let mut db = Database::new();
+/// let hello = Singleton::new("Hello".to_string());
+///
+/// assert_eq!(vec!["Hello".to_string()], db.evaluate(&hello).unwrap().into_tuples());
+/// ```
 #[derive(Clone, Debug)]
-pub struct Singleton<T>(pub T)
+pub struct Singleton<T>(T)
 where
     T: Tuple;
+
+impl<T: Tuple> Singleton<T> {
+    /// Create a new instance of `Singleton` with `tuple` as its inner value.
+    pub fn new(tuple: T) -> Self {
+        Self(tuple)
+    }
+
+    /// Returns the inner value of the receiver.
+    #[inline(always)]
+    pub fn tuple(&self) -> &T {
+        &self.0
+    }
+
+    /// Consumes the receiver and returns its inner value.
+    #[inline(always)]
+    pub fn into_tuple(self) -> T {
+        self.0
+    }
+}
 
 impl<T> Expression<T> for Singleton<T>
 where
@@ -16,20 +46,6 @@ where
     {
         visitor.visit_singleton(&self)
     }
-
-    fn collect<C>(&self, collector: &C) -> Result<crate::Tuples<T>, Error>
-    where
-        C: super::Collector,
-    {
-        collector.collect_singleton(&self)
-    }
-
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<crate::Tuples<T>>, Error>
-    where
-        C: super::ListCollector,
-    {
-        collector.collect_singleton(&self)
-    }
 }
 
 #[cfg(test)]
@@ -38,12 +54,12 @@ mod tests {
 
     #[test]
     fn test_new() {
-        assert_eq!(42, Singleton::<i32>(42).0);
+        assert_eq!(42, Singleton::new(42).into_tuple());
     }
 
     #[test]
     fn test_clone() {
-        let s = Singleton(42);
-        assert_eq!(42, s.clone().0);
+        let s = Singleton::new(42);
+        assert_eq!(42, s.clone().into_tuple());
     }
 }

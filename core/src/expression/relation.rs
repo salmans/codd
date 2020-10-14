@@ -1,13 +1,28 @@
 use super::{Expression, Visitor};
-use crate::{database::Tuples, expression::Error, Tuple};
+use crate::Tuple;
 use std::marker::PhantomData;
 
+/// Is an expression that points to a relation with tuples of type `T` that identified
+/// by a relation `name`.
+///
+/// **Example**:
+/// ```rust
+/// use codd::{Database, Relation};
+///
+/// let mut db = Database::new();
+/// let r = db.add_relation("R").unwrap();
+///
+/// db.insert(&r, vec![0, 1, 2, 3].into()).unwrap(); // insert into the relation instance
+///
+/// assert_eq!(vec![0, 1, 2, 3], db.evaluate(&r).unwrap().into_tuples());
+/// ```
 #[derive(Clone, Debug)]
 pub struct Relation<T>
 where
     T: Tuple,
 {
-    pub(crate) name: String,
+    name: String,
+    relation_deps: Vec<String>,
     _phantom: PhantomData<T>,
 }
 
@@ -15,15 +30,25 @@ impl<T> Relation<T>
 where
     T: Tuple,
 {
+    /// Creates a new `Relation` with a given `name`.
     pub fn new(name: &str) -> Self {
         Self {
-            name: name.to_string(),
+            name: name.into(),
+            relation_deps: vec![name.into()],
             _phantom: PhantomData,
         }
     }
 
+    /// Returns the name of this relation.
+    #[inline(always)]
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Returns a reference to relation dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn relation_deps(&self) -> &[String] {
+        &self.relation_deps
     }
 }
 
@@ -37,26 +62,12 @@ where
     {
         visitor.visit_relation(&self);
     }
-
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: super::Collector,
-    {
-        collector.collect_relation(&self)
-    }
-
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: super::ListCollector,
-    {
-        collector.collect_relation(&self)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::Database;
+    use crate::{Database, Tuples};
 
     #[test]
     fn test_new() {

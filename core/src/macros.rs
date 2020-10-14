@@ -45,7 +45,7 @@ macro_rules! relexp {
         (&$r).clone()
     };
     ([$s:expr]) => {
-        $crate::Singleton($s)
+        $crate::Singleton::new($s)
     };
     (select [$proj:expr] from ($($rel_exp:tt)*) $(where [$pred:expr])?) => {
         $crate::relexp!(@select ($($rel_exp)*) @proj -> [$proj] $(@pred -> [$pred])?)

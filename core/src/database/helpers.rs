@@ -1,5 +1,9 @@
-use crate::{database::Tuples, Tuple};
-
+/// Moves an ordered `slice` forward until `cmp` is true on the elements of `slice`.
+///
+/// **Note**: `gallop` is directly borrowed from [`datafrog`].
+///
+/// [`datafrog`]: https://github.com/rust-lang/datafrog
+#[inline(always)]
 pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T] {
     if slice.len() > 0 && cmp(&slice[0]) {
         let mut step = 1;
@@ -21,18 +25,18 @@ pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T
     slice
 }
 
-pub(crate) fn project_helper<T: Tuple>(tuples: &Tuples<T>, mut result: impl FnMut(&T)) {
-    let slice = &tuples[..];
+/// Applies `result` on elements of `slice`.
+#[inline(always)]
+pub(crate) fn project_helper<T>(slice: &[T], mut result: impl FnMut(&T)) {
+    let slice = &slice[..];
     for tuple in slice {
         result(tuple);
     }
 }
 
-pub(crate) fn product_helper<L: Tuple, R: Tuple>(
-    left: &Tuples<L>,
-    right: &Tuples<R>,
-    mut result: impl FnMut(&L, &R),
-) {
+/// Applies `result` on every pair of `left` and `right` slices.
+#[inline(always)]
+pub(crate) fn product_helper<L, R>(left: &[L], right: &[R], mut result: impl FnMut(&L, &R)) {
     let left = &left[..];
     let right = &right[..];
 
@@ -43,9 +47,17 @@ pub(crate) fn product_helper<L: Tuple, R: Tuple>(
     }
 }
 
-pub(crate) fn join_helper<Key: Tuple, L: Tuple, R: Tuple>(
-    left: &Tuples<(Key, L)>,
-    right: &Tuples<(Key, R)>,
+/// For two slices `left` and `right` that are sorted by the first element of their tuples,
+/// applies `result` on those pairs of `left` and `right` that agree on their first
+/// element as the key.
+///
+/// **Note**: `join_helper` is directly borrowed from [`datafrog`].
+///
+/// [`datafrog`]: https://github.com/rust-lang/datafrog
+#[inline(always)]
+pub(crate) fn join_helper<Key: Ord, L, R>(
+    left: &[(Key, L)],
+    right: &[(Key, R)],
     mut result: impl FnMut(&Key, &L, &R),
 ) {
     let mut slice1 = &left[..];
@@ -74,7 +86,10 @@ pub(crate) fn join_helper<Key: Tuple, L: Tuple, R: Tuple>(
     }
 }
 
-pub(crate) fn intersect_helper<T: Tuple>(left: &Tuples<T>, right: &Tuples<T>, result: &mut Vec<T>) {
+/// For two sorted slices `left` and `right`, applies `result` on those elements of `left` and `right`
+/// that are equal.
+#[inline(always)]
+pub(crate) fn intersect_helper<T: Ord>(left: &[T], right: &[T], mut result: impl FnMut(&T)) {
     let mut left = &left[..];
     let mut right = &right[..];
 
@@ -84,7 +99,7 @@ pub(crate) fn intersect_helper<T: Tuple>(left: &Tuples<T>, right: &Tuples<T>, re
         match left[0].cmp(&right[0]) {
             Ordering::Less => left = gallop(left, |x| x < &right[0]),
             Ordering::Equal => {
-                result.push(left[0].clone());
+                result(&left[0]);
                 left = &left[1..];
                 right = &right[1..];
             }
@@ -93,7 +108,10 @@ pub(crate) fn intersect_helper<T: Tuple>(left: &Tuples<T>, right: &Tuples<T>, re
     }
 }
 
-pub(crate) fn diff_helper<T: Tuple>(left: &Tuples<T>, right: &Vec<Tuples<T>>, result: &mut Vec<T>) {
+/// For two sorted slices `left` and `right`, applies `result` on those elements of `left` that appear
+/// in none of the slices of `right`.
+#[inline(always)]
+pub(crate) fn diff_helper<T: Ord>(left: &[T], right: &[&[T]], mut result: impl FnMut(&T)) {
     let left = &left[..];
     let mut right = right.iter().map(|sl| &sl[..]).collect::<Vec<&[T]>>();
 
@@ -120,7 +138,7 @@ pub(crate) fn diff_helper<T: Tuple>(left: &Tuples<T>, right: &Vec<Tuples<T>>, re
         }
 
         if to_add {
-            result.push(tuple.clone());
+            result(tuple);
         }
     }
 }

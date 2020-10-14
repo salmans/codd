@@ -1,7 +1,29 @@
-use super::{Expression, Visitor};
-use crate::{database::Tuples, expression::Error, Tuple};
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use super::{view::ViewRef, Expression, Visitor};
+use crate::Tuple;
+use std::{
+    cell::{RefCell, RefMut},
+    marker::PhantomData,
+    rc::Rc,
+};
 
+/// Projects the inner expression of type `S` to an expression of type `T`.
+///
+/// **Example**:
+/// ```rust
+/// use codd::{Database, Project};
+///
+/// let mut db = Database::new();
+/// let fruit = db.add_relation::<String>("R").unwrap();
+///
+/// db.insert(&fruit, vec!["Apple".to_string(), "BANANA".to_string(), "cherry".to_string()].into());
+///
+/// let lower = Project::new(
+///     &fruit,
+///     |t| t.to_lowercase(), // projecting closure
+/// );
+///
+/// assert_eq!(vec!["apple", "banana", "cherry"], db.evaluate(&lower).unwrap().into_tuples());
+/// ```
 #[derive(Clone)]
 pub struct Project<S, T, E>
 where
@@ -11,6 +33,8 @@ where
 {
     expression: E,
     mapper: Rc<RefCell<dyn FnMut(&S) -> T>>,
+    relation_deps: Vec<String>,
+    view_deps: Vec<ViewRef>,
 }
 
 impl<S, T, E> Project<S, T, E>
@@ -19,19 +43,45 @@ where
     T: Tuple,
     E: Expression<S>,
 {
-    pub fn new(expression: &E, project: impl FnMut(&S) -> T + 'static) -> Self {
+    /// Creates a new `Project` expression over `expression` with a closure `mapper` that
+    /// projects tuples of `expression` to the resulting tuples.
+    pub fn new(expression: &E, mapper: impl FnMut(&S) -> T + 'static) -> Self {
+        use super::dependency;
+
+        let mut deps = dependency::DependencyVisitor::new();
+        expression.visit(&mut deps);
+        let (relation_deps, view_deps) = deps.into_dependencies();
+
         Self {
             expression: expression.clone(),
-            mapper: Rc::new(RefCell::new(project)),
+            mapper: Rc::new(RefCell::new(mapper)),
+            relation_deps: relation_deps.into_iter().collect(),
+            view_deps: view_deps.into_iter().collect(),
         }
     }
 
+    /// Returns a reference to the underlying expression.
+    #[inline(always)]
     pub fn expression(&self) -> &E {
         &self.expression
     }
 
-    pub(crate) fn mapper(&self) -> &Rc<RefCell<dyn FnMut(&S) -> T>> {
-        &self.mapper
+    /// Returns a mutable reference (of type `std::cell::RefMut`) to the projecting closure.
+    #[inline(always)]
+    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&S) -> T> {
+        self.mapper.borrow_mut()
+    }
+
+    /// Returns a reference to relation dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn relation_deps(&self) -> &[String] {
+        &self.relation_deps
+    }
+
+    /// Returns a reference to view dependencies of the receiver.
+    #[inline(always)]
+    pub(crate) fn view_deps(&self) -> &[ViewRef] {
+        &self.view_deps
     }
 }
 
@@ -47,22 +97,9 @@ where
     {
         visitor.visit_project(&self);
     }
-
-    fn collect<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-    where
-        C: super::Collector,
-    {
-        collector.collect_project(&self)
-    }
-
-    fn collect_list<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-    where
-        C: super::ListCollector,
-    {
-        collector.collect_project(&self)
-    }
 }
 
+// A hack:
 #[derive(Debug)]
 struct Debuggable<S, E>
 where
@@ -91,7 +128,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Database;
+    use crate::{Database, Tuples};
 
     #[test]
     fn test_clone() {
