@@ -1,4 +1,4 @@
-use super::{Expression, Visitor};
+use super::{Builder, Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -36,6 +36,10 @@ where
         Self {
             _phantom: PhantomData,
         }
+    }
+
+    pub fn builder(&self) -> Builder<T, Self> {
+        Builder::from(self.clone())
     }
 }
 

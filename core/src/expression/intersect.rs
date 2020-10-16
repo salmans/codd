@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Expression, Visitor};
+use super::{view::ViewRef, Builder, Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -79,6 +79,10 @@ where
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps
+    }
+
+    pub fn builder(&self) -> Builder<T, Self> {
+        Builder::from(self.clone())
     }
 }
 

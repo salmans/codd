@@ -1,4 +1,4 @@
-use super::{Expression, Visitor};
+use super::{Builder, Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -31,10 +31,14 @@ where
     T: Tuple,
 {
     /// Creates a new `Relation` with a given `name`.
-    pub fn new(name: &str) -> Self {
+    pub fn new<S>(name: S) -> Self
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
         Self {
-            name: name.into(),
-            relation_deps: vec![name.into()],
+            relation_deps: vec![name.clone()],
+            name,
             _phantom: PhantomData,
         }
     }
@@ -49,6 +53,15 @@ where
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps
+    }
+}
+
+impl<T> Relation<T>
+where
+    T: Tuple + 'static,
+{
+    pub fn builder(&self) -> Builder<T, Self> {
+        Builder::from(self.clone())
     }
 }
 

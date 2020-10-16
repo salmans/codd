@@ -37,6 +37,62 @@ pub trait ExpressionExt<T: Tuple>: Expression<T> {
     fn view_dependencies(&self) -> &[view::ViewRef];
 }
 
+impl<T, E> ExpressionExt<T> for &E
+where
+    T: Tuple,
+    E: ExpressionExt<T>,
+{
+    fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    where
+        C: RecentCollector,
+    {
+        (*self).collect_recent(collector)
+    }
+
+    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    where
+        C: StableCollector,
+    {
+        (*self).collect_stable(collector)
+    }
+
+    fn relation_dependencies(&self) -> &[String] {
+        (*self).relation_dependencies()
+    }
+
+    fn view_dependencies(&self) -> &[view::ViewRef] {
+        (*self).view_dependencies()
+    }
+}
+
+impl<T, E> ExpressionExt<T> for Box<E>
+where
+    T: Tuple,
+    E: ExpressionExt<T>,
+{
+    fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    where
+        C: RecentCollector,
+    {
+        (**self).collect_recent(collector)
+    }
+
+    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    where
+        C: StableCollector,
+    {
+        (**self).collect_stable(collector)
+    }
+
+    fn relation_dependencies(&self) -> &[String] {
+        (**self).relation_dependencies()
+    }
+
+    fn view_dependencies(&self) -> &[view::ViewRef] {
+        (**self).view_dependencies()
+    }
+}
+
 /// Is the trait of objects that implement the logic for collecting the recent tuples of
 /// a database when the visited expression is evaluated.
 pub trait RecentCollector {
@@ -520,29 +576,6 @@ mod r#impl {
                 Mono::Join(exp) => exp.view_dependencies(),
                 Mono::View(exp) => exp.view_dependencies(),
             }
-        }
-    }
-
-    impl<T: Tuple + 'static> ExpressionExt<T> for Box<Mono<T>> {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
-        where
-            C: RecentCollector,
-        {
-            (**self).collect_recent(collector)
-        }
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
-        where
-            C: StableCollector,
-        {
-            (**self).collect_stable(collector)
-        }
-
-        fn relation_dependencies(&self) -> &[String] {
-            (**self).relation_dependencies()
-        }
-
-        fn view_dependencies(&self) -> &[view::ViewRef] {
-            (**self).view_dependencies()
         }
     }
 

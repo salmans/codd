@@ -4,6 +4,7 @@ can be evaluated in [`Database`].
 [`Tuple`]: ../trait.Tuple.html
 [`Database`]: ./database/struct.Database.html
 */
+mod builder;
 pub(crate) mod dependency;
 mod difference;
 mod empty;
@@ -20,6 +21,7 @@ mod union;
 pub(crate) mod view;
 
 use crate::Tuple;
+pub use builder::Builder;
 pub use difference::Difference;
 pub use empty::Empty;
 pub use full::Full;
@@ -43,6 +45,32 @@ pub trait Expression<T: Tuple>: Clone + std::fmt::Debug {
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor;
+}
+
+impl<T, E> Expression<T> for &E
+where
+    T: Tuple,
+    E: Expression<T>,
+{
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor,
+    {
+        (*self).visit(visitor)
+    }
+}
+
+impl<T, E> Expression<T> for Box<E>
+where
+    T: Tuple,
+    E: Expression<T>,
+{
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor,
+    {
+        (**self).visit(visitor)
+    }
 }
 
 /// Is the trait of objects that visit [`Expression`]s. The default implementation guides

@@ -35,6 +35,10 @@ impl<T: Tuple + 'static> Mono<T> {
     pub fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
+
+    pub fn builder(&self) -> Builder<T, Self> {
+        Builder::from(self.clone())
+    }
 }
 
 impl<T: Tuple> From<Full<T>> for Mono<T> {
@@ -128,14 +132,5 @@ impl<T: Tuple + 'static> Expression<T> for Mono<T> {
             Mono::Join(exp) => exp.visit(visitor),
             Mono::View(exp) => exp.visit(visitor),
         }
-    }
-}
-
-impl<T: Tuple + 'static> Expression<T> for Box<Mono<T>> {
-    fn visit<V>(&self, visitor: &mut V)
-    where
-        V: Visitor,
-    {
-        (**self).visit(visitor)
     }
 }
