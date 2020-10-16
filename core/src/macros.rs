@@ -16,7 +16,7 @@ macro_rules! relalg {
             let inner_exp = $crate::relexp!(@select ($($rel_exp)*)
                                             @proj -> [$proj]
                                             $(@pred -> [$pred])?);
-            $db.store_view(&inner_exp)
+            $db.store_view(inner_exp.clone())
         }
     };
     (create view as
@@ -24,7 +24,7 @@ macro_rules! relalg {
      in $db:ident) => {
         {
             let inner_exp = $crate::relexp!(@select ($($rel_exp)*) $(@pred -> [$pred])?);
-            $db.store_view(&inner_exp)
+            $db.store_view(inner_exp.clone())
         }
     };
     (insert into ($relation:ident) values [$($value:expr),*] in $db:ident) => {
@@ -70,16 +70,16 @@ macro_rules! relexp {
     };
     (@select ($($rel_exp:tt)*) @proj -> [$proj:expr] @pred -> [$pred:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
-        let sel_exp = $crate::expression::Select::new(&rel_exp, $pred);
-        $crate::expression::Project::new(&sel_exp, $proj)
+        let sel_exp = $crate::expression::Select::new(rel_exp, $pred);
+        $crate::expression::Project::new(sel_exp, $proj)
     }};
     (@select ($($rel_exp:tt)*) @proj -> [$proj:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
-        $crate::expression::Project::new(&rel_exp, $proj)
+        $crate::expression::Project::new(rel_exp, $proj)
     }};
     (@select ($($rel_exp:tt)*) @pred -> [$pred:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
-        $crate::expression::Select::new(&rel_exp, $pred)
+        $crate::expression::Select::new(rel_exp, $pred)
     }};
     (@select ($($rel_exp:tt)*)) => {{
         $crate::relexp!($($rel_exp)*)
@@ -87,27 +87,27 @@ macro_rules! relexp {
     (@cross ($($left:tt)*) ($($right:tt)*) @mapper -> [$mapper:expr]) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::expression::Product::new(&left, &right, $mapper)
+        $crate::expression::Product::new(left, right, $mapper)
     }};
     (@join ($($left:tt)*) @lkey -> [$lkey:expr] ($($right:tt)*) @rkey -> [$rkey:expr] @mapper -> [$mapper:expr]) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::expression::Join::new(&left, &right, $lkey, $rkey, $mapper)
+        $crate::expression::Join::new(left, right, $lkey, $rkey, $mapper)
     }};
     (@union ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::expression::Union::new(&left, &right)
+        $crate::expression::Union::new(left, right)
     }};
     (@intersect ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::expression::Intersect::new(&left, &right)
+        $crate::expression::Intersect::new(left, right)
     }};
     (@minus ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::expression::Difference::new(&left, &right)
+        $crate::expression::Difference::new(left, right)
     }};
 }
 

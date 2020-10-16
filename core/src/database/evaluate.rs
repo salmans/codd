@@ -1365,7 +1365,7 @@ mod tests {
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r").unwrap();
-            let v = database.store_view(&r).unwrap();
+            let v = database.store_view(r.clone()).unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let result = database.evaluate(&v).unwrap();
             assert_eq!(Tuples::<i32>::from(vec![1, 2, 3]), result);
@@ -1373,9 +1373,9 @@ mod tests {
         {
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r").unwrap();
-            let v_1 = database.store_view(&r).unwrap();
-            let v_2 = database.store_view(&v_1).unwrap();
-            let v_3 = database.store_view(&v_2).unwrap();
+            let v_1 = database.store_view(r.clone()).unwrap();
+            let v_2 = database.store_view(v_1).unwrap();
+            let v_3 = database.store_view(v_2).unwrap();
 
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
 
@@ -1392,7 +1392,7 @@ mod tests {
                 .join(s.builder().with_key(|t| t.0))
                 .on(|_, &l, &r| (l.1, r.1))
                 .build();
-            let view = database.store_view(&r_s).unwrap();
+            let view = database.store_view(r_s).unwrap();
 
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1418,7 +1418,7 @@ mod tests {
                 .on(|_, &l, &r| (l.1, r.1))
                 .build();
 
-            let view = database.store_view(&r_s).unwrap();
+            let view = database.store_view(r_s).unwrap();
 
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1452,7 +1452,7 @@ mod tests {
                 .join(t.builder().with_key(|t| t.0))
                 .on(|_, _, &r| r.1)
                 .build();
-            let view = database.store_view(&r_s_t).unwrap();
+            let view = database.store_view(r_s_t).unwrap();
 
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1479,7 +1479,7 @@ mod tests {
                 .join(t.builder().with_key(|t| t.0))
                 .on(|_, &l, &r| l.1 * r.1)
                 .build();
-            let view = database.store_view(&rs_t).unwrap();
+            let view = database.store_view(rs_t).unwrap();
 
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1509,7 +1509,7 @@ mod tests {
                 .join(t.builder().with_key(|t| t.0))
                 .on(|_, &l, &r| l.1 * r.1)
                 .build();
-            let view = database.store_view(&rs_t).unwrap();
+            let view = database.store_view(rs_t).unwrap();
 
             database
                 .insert(&r, vec![(1, 4), (2, 2), (1, 3)].into())
@@ -1530,7 +1530,7 @@ mod tests {
             let s = database.add_relation::<(i32, i32)>("s").unwrap();
             let rs = r.builder().difference(s.clone()).build();
 
-            assert!(database.store_view(&rs).is_err());
+            assert!(database.store_view(rs).is_err());
         }
         {
             let mut database = Database::new();
@@ -1544,17 +1544,17 @@ mod tests {
                 .join(t.builder().with_key(|t| t.0))
                 .on(|_, &l, &r| l.1 * r.1)
                 .build();
-            assert!(database.store_view(&rs_t).is_err());
+            assert!(database.store_view(rs_t).is_err());
         }
         {
             // Test new view initialization after a refering relation is already stable:
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r").unwrap();
-            let v1 = database.store_view(&r).unwrap();
+            let v1 = database.store_view(r.clone()).unwrap();
             database.insert(&r, vec![1, 2, 3].into()).unwrap();
             let _ = database.evaluate(&v1).unwrap();
 
-            let v2 = database.store_view(&r).unwrap();
+            let v2 = database.store_view(r).unwrap();
             let result = database.evaluate(&v2).unwrap();
             assert_eq!(vec![1, 2, 3], result.into_tuples());
         }
@@ -1564,15 +1564,15 @@ mod tests {
             //   it will lose its recent tuples, so `v3` will be empty.
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r").unwrap();
-            let v1 = database.store_view(&r).unwrap();
+            let v1 = database.store_view(r.clone()).unwrap();
             let r_v1 = r
                 .builder()
                 .with_key(|&t| t)
                 .join(v1.builder().with_key(|&t| t))
                 .on(|_, &l, &r| l + r)
                 .build();
-            let v2 = database.store_view(&r_v1).unwrap();
-            let v3 = database.store_view(&r).unwrap();
+            let v2 = database.store_view(r_v1).unwrap();
+            let v3 = database.store_view(r.clone()).unwrap();
             database.insert(&r, vec![1, 2].into()).unwrap();
 
             assert_eq!(vec![1, 2], database.evaluate(&v1).unwrap().into_tuples());
@@ -1585,16 +1585,16 @@ mod tests {
             //   it will lose its recent tuples, so `v3` will be empty.
             let mut database = Database::new();
             let r = database.add_relation::<i32>("r").unwrap();
-            let u = database.store_view(&r).unwrap();
-            let v1 = database.store_view(&u).unwrap();
+            let u = database.store_view(r.clone()).unwrap();
+            let v1 = database.store_view(u.clone()).unwrap();
             let u_v1 = r
                 .builder()
                 .with_key(|&t| t)
                 .join(v1.builder().with_key(|&t| t))
                 .on(|_, &l, &r| l + r)
                 .build();
-            let v2 = database.store_view(&u_v1).unwrap();
-            let v3 = database.store_view(&u).unwrap();
+            let v2 = database.store_view(u_v1).unwrap();
+            let v3 = database.store_view(u).unwrap();
             database.insert(&r, vec![1, 2].into()).unwrap();
 
             assert_eq!(vec![1, 2], database.evaluate(&v1).unwrap().into_tuples());

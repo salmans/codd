@@ -1,4 +1,4 @@
-use codd::{Database, Error};
+use codd::{Database, Error, Expression};
 use either::Either;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -174,9 +174,9 @@ fn main() -> Result<(), Error> {
         music.evaluate(&dt_member)?.into_tuples()
     );
 
-    let dt_member_view = music.store_view(&dt_member)?;
+    let dt_member_view = music.store_view(dt_member)?;
     let drummer_view = music.store_view(
-        &musician
+        musician
             .builder()
             .select(|m| m.instruments.contains(&Drums))
             .build(),

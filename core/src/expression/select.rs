@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Builder, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::{
     cell::{RefCell, RefMut},
@@ -42,18 +42,20 @@ where
     E: Expression<T>,
 {
     /// Creates a new `Select` expression over `expression` according to the `predicate` closure.
-    pub fn new<P>(expression: &E, predicate: P) -> Self
+    pub fn new<I, P>(expression: I, predicate: P) -> Self
     where
+        I: IntoExpression<T, E>,
         P: FnMut(&T) -> bool + 'static,
     {
         use super::dependency;
+        let expression = expression.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         expression.visit(&mut deps);
         let (relation_deps, view_deps) = deps.into_dependencies();
 
         Self {
-            expression: expression.clone(),
+            expression,
             predicate: Rc::new(RefCell::new(predicate)),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
@@ -82,10 +84,6 @@ where
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps
-    }
-
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
     }
 }
 

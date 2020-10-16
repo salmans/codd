@@ -1,4 +1,4 @@
-use super::{Builder, Expression};
+use super::Expression;
 use crate::Tuple;
 
 /// Represents a single tuple of type `T`.
@@ -33,10 +33,6 @@ impl<T: Tuple> Singleton<T> {
     #[inline(always)]
     pub fn into_tuple(self) -> T {
         self.0
-    }
-
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
     }
 }
 

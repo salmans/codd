@@ -9,6 +9,7 @@ pub mod expression;
 mod macros;
 
 pub use database::{Database, Tuples};
+pub use expression::Expression;
 use thiserror::Error;
 
 /// Is the trait of tuples (analogous to the rows of a relational table).

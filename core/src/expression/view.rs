@@ -1,4 +1,4 @@
-use super::{Builder, Expression, Visitor};
+use super::{Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -21,11 +21,11 @@ pub struct ViewRef(pub(crate) i32);
 ///
 /// // divide all elements of `dividends` by all elements of `divisors`:
 /// let quotients = Product::new(
-///     &dividends,
-///     &divisors,
+///     dividends.clone(),
+///     divisors.clone(),
 ///     |&l, &r| l/r
 /// );
-/// let view = db.store_view(&quotients).unwrap();
+/// let view = db.store_view(quotients.clone()).unwrap();
 ///
 /// // `view` and `quotients` evaluate to the same result:
 /// assert_eq!(vec![2, 3, 4, 6, 9], db.evaluate(&quotients).unwrap().into_tuples());
@@ -42,7 +42,7 @@ pub struct ViewRef(pub(crate) i32);
 ///
 /// use codd::expression::Difference;
 /// // incremental view update for `Difference` is currently not supported:
-/// assert!(db.store_view(&Difference::new(&dividends, &divisors)).is_err());
+/// assert!(db.store_view(Difference::new(dividends, divisors)).is_err());
 /// ```
 #[derive(Clone, Debug)]
 pub struct View<T, E>
@@ -82,16 +82,6 @@ where
     }
 }
 
-impl<T, E> View<T, E>
-where
-    T: Tuple + 'static,
-    E: Expression<T> + 'static,
-{
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
-    }
-}
-
 impl<T, E> Expression<T> for View<T, E>
 where
     T: Tuple + 'static,
@@ -113,7 +103,7 @@ mod tests {
     fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r").unwrap();
-        let v = database.store_view(&r).unwrap().clone();
+        let v = database.store_view(r.clone()).unwrap().clone();
         database.insert(&r, vec![1, 2, 3].into()).unwrap();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 2, 3]),

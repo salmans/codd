@@ -32,7 +32,7 @@ codd = "0.1"
 Use `codd` in your code:
 
 ```rust
-use codd::{Database, Error};
+use codd::{Database, Error, Expression};
 ```
 
 Create a new database:
@@ -148,9 +148,9 @@ Here is a more complex query:
 Store views of expressions:
 
 ```rust
-    let dt_member_view = music.store_view(&dt_members)?; // view on `dt_member`
-    let drummer_view = music.store_view(                 // drummers view
-        &musician
+    let dt_member_view = music.store_view(dt_members)?; // view on `dt_member`
+    let drummer_view = music.store_view(                // drummers view
+        musician
             .builder()
             .select(|m| m.instruments.contains(&Drums))
             .build(),

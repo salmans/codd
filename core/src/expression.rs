@@ -45,6 +45,10 @@ pub trait Expression<T: Tuple>: Clone + std::fmt::Debug {
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor;
+
+    fn builder(&self) -> Builder<T, Self> {
+        Builder::from(self.clone())
+    }
 }
 
 impl<T, E> Expression<T> for &E
@@ -70,6 +74,28 @@ where
         V: Visitor,
     {
         (**self).visit(visitor)
+    }
+}
+
+/// Is the trait of types that can be turned into an [`Expression`].
+///
+/// [`Expression`]: ./trait.Expression.html
+pub trait IntoExpression<T, E>
+where
+    T: Tuple,
+    E: Expression<T>,
+{
+    /// Consumes the receiver and returns an expression.
+    fn into_expression(self) -> E;
+}
+
+impl<T, E> IntoExpression<T, E> for E
+where
+    T: Tuple,
+    E: Expression<T>,
+{
+    fn into_expression(self) -> E {
+        self
     }
 }
 

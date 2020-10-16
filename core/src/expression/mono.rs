@@ -35,10 +35,6 @@ impl<T: Tuple + 'static> Mono<T> {
     pub fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
-
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
-    }
 }
 
 impl<T: Tuple> From<Full<T>> for Mono<T> {

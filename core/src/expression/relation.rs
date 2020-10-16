@@ -1,4 +1,4 @@
-use super::{Builder, Expression, Visitor};
+use super::{Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -53,15 +53,6 @@ where
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps
-    }
-}
-
-impl<T> Relation<T>
-where
-    T: Tuple + 'static,
-{
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
     }
 }
 

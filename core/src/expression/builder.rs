@@ -2,28 +2,6 @@ use super::*;
 use crate::Tuple;
 use std::marker::PhantomData;
 
-/// Is the trait of types that can be turned into an [`Expression`].
-///
-/// [`Expression`]: ./trait.Expression.html
-pub trait IntoExpression<T, E>
-where
-    T: Tuple,
-    E: Expression<T>,
-{
-    /// Consumes the receiver and returns an expression.
-    fn into_expression(self) -> E;
-}
-
-impl<T, E> IntoExpression<T, E> for E
-where
-    T: Tuple,
-    E: Expression<T>,
-{
-    fn into_expression(self) -> E {
-        self
-    }
-}
-
 /// Is a builder for building [`Expression`]s.
 ///
 /// [`Expression`]: ./trait.Expression.html
@@ -48,7 +26,7 @@ where
     ///
     /// **Example**:
     /// ```rust
-    /// use codd::Database;
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let fruit = db.add_relation::<String>("R").unwrap();
@@ -64,7 +42,7 @@ where
         T: Tuple,
     {
         Builder {
-            expression: Project::new(&self.expression, f),
+            expression: Project::new(self.expression, f),
             _marker: PhantomData,
         }
     }
@@ -75,12 +53,12 @@ where
     ///    
     /// **Example**:
     /// ```rust
-    /// use codd::Database;
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let fruit = db.add_relation::<String>("Fruit").unwrap();
     ///
-    /// db.insert(&fruit, vec!["Apple".to_string(), "BANANA".to_string(), "cherry".to_string()].into());
+    /// db.insert(&fruit, vec!["Apple".to_string(), "BANANA".into(), "cherry".into()].into());
     ///
     /// let select = fruit.builder().select(|t| t.contains('A')).build();
     ///
@@ -88,7 +66,7 @@ where
     /// ```
     pub fn select(self, f: impl FnMut(&L) -> bool + 'static) -> Builder<L, Select<L, Left>> {
         Builder {
-            expression: Select::new(&self.expression, f),
+            expression: Select::new(self.expression, f),
             _marker: PhantomData,
         }
     }
@@ -99,7 +77,7 @@ where
     ///
     /// **Example**:
     /// ```rust
-    /// use codd::Database;
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let r = db.add_relation::<i32>("R").unwrap();
@@ -118,7 +96,7 @@ where
         I: IntoExpression<L, Right>,
     {
         Builder {
-            expression: Intersect::new(&self.expression, &other.into_expression()),
+            expression: Intersect::new(self.expression, other.into_expression()),
             _marker: PhantomData,
         }
     }
@@ -129,7 +107,7 @@ where
     ///
     /// **Example**:
     /// ```rust
-    /// use codd::{Database, expression::Difference};
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let r = db.add_relation::<i32>("R").unwrap();
@@ -150,7 +128,7 @@ where
         I: IntoExpression<L, Right>,
     {
         Builder {
-            expression: Difference::new(&self.expression, &other.into_expression()),
+            expression: Difference::new(self.expression, other.into_expression()),
             _marker: PhantomData,
         }
     }
@@ -161,7 +139,7 @@ where
     ///
     /// **Example**:
     /// ```rust
-    /// use codd::Database;
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let r = db.add_relation::<i32>("R").unwrap();
@@ -180,7 +158,7 @@ where
         I: IntoExpression<L, Right>,
     {
         Builder {
-            expression: Union::new(&self.expression, &other.into_expression()),
+            expression: Union::new(self.expression, other.into_expression()),
             _marker: PhantomData,
         }
     }
@@ -192,7 +170,7 @@ where
     ///
     /// **Example**:
     /// ```rust
-    /// use codd::Database;
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let r = db.add_relation::<i32>("R").unwrap();
@@ -226,7 +204,7 @@ where
     ///
     /// **Example**:
     /// ```rust
-    /// use codd::Database;
+    /// use codd::{Database, Expression};
     ///
     /// let mut db = Database::new();
     /// let fruit = db.add_relation::<(i32, String)>("R").unwrap();
@@ -234,8 +212,8 @@ where
     ///
     /// db.insert(&fruit, vec![
     ///    (0, "Apple".to_string()),
-    ///    (1, "Banana".to_string()),
-    ///    (2, "Cherry".to_string())
+    ///    (1, "Banana".into()),
+    ///    (2, "Cherry".into())
     /// ].into());
     /// db.insert(&numbers, vec![0, 2].into());
     ///
@@ -312,7 +290,7 @@ where
         f: impl FnMut(&L, &R) -> T + 'static,
     ) -> Builder<T, Product<L, R, Left, Right, T>> {
         Builder {
-            expression: Product::new(&self.left, &self.right, f),
+            expression: Product::new(self.left, self.right, f),
             _marker: PhantomData,
         }
     }
@@ -375,8 +353,8 @@ where
     ) -> Builder<T, Join<K, L, R, Left, Right, T>> {
         Builder {
             expression: Join::new(
-                &self.left.expression,
-                &self.right.expression,
+                self.left.expression,
+                self.right.expression,
                 self.left.key,
                 self.right.key,
                 f,

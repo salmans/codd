@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Builder, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -43,8 +43,15 @@ where
 {
     /// Creates a new instance of `Difference` corresponding to
     /// `left` - `right`.
-    pub fn new(left: &L, right: &R) -> Self {
+    pub fn new<IL, IR>(left: IL, right: IR) -> Self
+    where
+        IL: IntoExpression<T, L>,
+        IR: IntoExpression<T, R>,
+    {
         use super::dependency;
+
+        let left = left.into_expression();
+        let right = right.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         left.visit(&mut deps);
@@ -82,10 +89,6 @@ where
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps
-    }
-
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
     }
 }
 

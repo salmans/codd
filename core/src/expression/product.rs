@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Builder, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::{
     cell::{RefCell, RefMut},
@@ -49,8 +49,14 @@ where
 {
     /// Creates a `Product` expression over `left` and `right` with `mapper` as the closure
     /// that produces the tuples of the resulting expression from tuples of `left` and `right`.
-    pub fn new(left: &Left, right: &Right, project: impl FnMut(&L, &R) -> T + 'static) -> Self {
+    pub fn new<IL, IR>(left: IL, right: IR, project: impl FnMut(&L, &R) -> T + 'static) -> Self
+    where
+        IL: IntoExpression<L, Left>,
+        IR: IntoExpression<R, Right>,
+    {
         use super::dependency;
+        let left = left.into_expression();
+        let right = right.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         left.visit(&mut deps);
@@ -94,10 +100,6 @@ where
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps
-    }
-
-    pub fn builder(&self) -> Builder<T, Self> {
-        Builder::from(self.clone())
     }
 }
 
