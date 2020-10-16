@@ -13,16 +13,16 @@ use std::{
 /// use codd::{Database, expression::Select};
 ///
 /// let mut db = Database::new();
-/// let r = db.add_relation::<String>("Fruit").unwrap();
+/// let fruit = db.add_relation::<String>("Fruit").unwrap();
 ///
-/// db.insert(&r, vec!["Apple".to_string(), "BANANA".to_string(), "cherry".to_string()].into());
+/// db.insert(&fruit, vec!["Apple".to_string(), "BANANA".to_string(), "cherry".to_string()].into());
 ///
-/// let lower = Select::new(
-///     &r,
+/// let select = Select::new(
+///     &fruit,
 ///     |t| t.contains('A'), // select predicate
 /// );
 ///
-/// assert_eq!(vec!["Apple", "BANANA"], db.evaluate(&lower).unwrap().into_tuples());
+/// assert_eq!(vec!["Apple", "BANANA"], db.evaluate(&select).unwrap().into_tuples());
 /// ```
 #[derive(Clone)]
 pub struct Select<T, E>
