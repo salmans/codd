@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Relation};
+/// use codd::{Database, expression::Relation};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation("R").unwrap();

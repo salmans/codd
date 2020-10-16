@@ -1,5 +1,5 @@
 use crate::{
-    expression::{view::ViewRef, Expression, Visitor},
+    expression::{view::ViewRef, Expression, Relation, View, Visitor},
     Tuple,
 };
 use std::collections::HashSet;
@@ -27,14 +27,14 @@ impl DependencyVisitor {
 }
 
 impl Visitor for DependencyVisitor {
-    fn visit_relation<T>(&mut self, relation: &crate::Relation<T>)
+    fn visit_relation<T>(&mut self, relation: &Relation<T>)
     where
         T: Tuple,
     {
         self.relations.insert(relation.name().into());
     }
 
-    fn visit_view<T, E>(&mut self, view: &crate::View<T, E>)
+    fn visit_view<T, E>(&mut self, view: &View<T, E>)
     where
         T: Tuple,
         E: Expression<T>,

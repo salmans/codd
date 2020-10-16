@@ -45,7 +45,7 @@ macro_rules! relexp {
         (&$r).clone()
     };
     ([$s:expr]) => {
-        $crate::Singleton::new($s)
+        $crate::expression::Singleton::new($s)
     };
     (select [$proj:expr] from ($($rel_exp:tt)*) $(where [$pred:expr])?) => {
         $crate::relexp!(@select ($($rel_exp)*) @proj -> [$proj] $(@pred -> [$pred])?)
@@ -70,16 +70,16 @@ macro_rules! relexp {
     };
     (@select ($($rel_exp:tt)*) @proj -> [$proj:expr] @pred -> [$pred:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
-        let sel_exp = $crate::Select::new(&rel_exp, $pred);
-        $crate::Project::new(&sel_exp, $proj)
+        let sel_exp = $crate::expression::Select::new(&rel_exp, $pred);
+        $crate::expression::Project::new(&sel_exp, $proj)
     }};
     (@select ($($rel_exp:tt)*) @proj -> [$proj:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
-        $crate::Project::new(&rel_exp, $proj)
+        $crate::expression::Project::new(&rel_exp, $proj)
     }};
     (@select ($($rel_exp:tt)*) @pred -> [$pred:expr]) => {{
         let rel_exp = $crate::relexp!($($rel_exp)*);
-        $crate::Select::new(&rel_exp, $pred)
+        $crate::expression::Select::new(&rel_exp, $pred)
     }};
     (@select ($($rel_exp:tt)*)) => {{
         $crate::relexp!($($rel_exp)*)
@@ -87,27 +87,27 @@ macro_rules! relexp {
     (@cross ($($left:tt)*) ($($right:tt)*) @mapper -> [$mapper:expr]) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Product::new(&left, &right, $mapper)
+        $crate::expression::Product::new(&left, &right, $mapper)
     }};
     (@join ($($left:tt)*) @lkey -> [$lkey:expr] ($($right:tt)*) @rkey -> [$rkey:expr] @mapper -> [$mapper:expr]) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Join::new(&left, &right, $lkey, $rkey, $mapper)
+        $crate::expression::Join::new(&left, &right, $lkey, $rkey, $mapper)
     }};
     (@union ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Union::new(&left, &right)
+        $crate::expression::Union::new(&left, &right)
     }};
     (@intersect ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Intersect::new(&left, &right)
+        $crate::expression::Intersect::new(&left, &right)
     }};
     (@minus ($($left:tt)*) ($($right:tt)*)) => {{
         let left = $crate::relexp!($($left)*);
         let right = $crate::relexp!($($right)*);
-        $crate::Difference::new(&left, &right)
+        $crate::expression::Difference::new(&left, &right)
     }};
 }
 

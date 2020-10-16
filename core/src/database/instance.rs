@@ -1,5 +1,5 @@
 use super::{evaluate, expression_ext::ExpressionExt, helpers::gallop, Database};
-use crate::{Error, Expression, Tuple};
+use crate::{expression::Expression, Error, Tuple};
 use std::any::Any;
 use std::{
     cell::{Ref, RefCell},

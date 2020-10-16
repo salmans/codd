@@ -1,4 +1,7 @@
-use crate::{expression::view, Tuples, *};
+use crate::{
+    expression::{view::ViewRef, *},
+    Error, Tuple, Tuples,
+};
 
 /// Extends `Expression` with methods required for incremental database update.
 ///
@@ -34,7 +37,7 @@ pub trait ExpressionExt<T: Tuple>: Expression<T> {
 
     /// Returns an iterator over the view dependencies of this expression. These are
     /// references to views that show up in the receiver expression.
-    fn view_dependencies(&self) -> &[view::ViewRef];
+    fn view_dependencies(&self) -> &[ViewRef];
 }
 
 impl<T, E> ExpressionExt<T> for &E
@@ -60,7 +63,7 @@ where
         (*self).relation_dependencies()
     }
 
-    fn view_dependencies(&self) -> &[view::ViewRef] {
+    fn view_dependencies(&self) -> &[ViewRef] {
         (*self).view_dependencies()
     }
 }
@@ -88,7 +91,7 @@ where
         (**self).relation_dependencies()
     }
 
-    fn view_dependencies(&self) -> &[view::ViewRef] {
+    fn view_dependencies(&self) -> &[ViewRef] {
         (**self).view_dependencies()
     }
 }
@@ -285,9 +288,10 @@ pub trait StableCollector {
 
 mod r#impl {
     use super::{ExpressionExt, RecentCollector, StableCollector};
-    use crate::{expression::view, Error, Tuple, Tuples};
-
-    use crate::View;
+    use crate::{
+        expression::view::{View, ViewRef},
+        Error, Tuple, Tuples,
+    };
 
     impl<T, E> ExpressionExt<T> for View<T, E>
     where
@@ -312,12 +316,12 @@ mod r#impl {
             &[]
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Intersect;
+    use crate::expression::Intersect;
 
     impl<T, L, R> ExpressionExt<T> for Intersect<T, L, R>
     where
@@ -343,12 +347,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Union;
+    use crate::expression::Union;
 
     impl<T, L, R> ExpressionExt<T> for Union<T, L, R>
     where
@@ -374,12 +378,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Difference;
+    use crate::expression::Difference;
 
     impl<T, L, R> ExpressionExt<T> for Difference<T, L, R>
     where
@@ -405,12 +409,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Empty;
+    use crate::expression::Empty;
 
     impl<T> ExpressionExt<T> for Empty<T>
     where
@@ -434,12 +438,12 @@ mod r#impl {
             &[]
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             &[]
         }
     }
 
-    use crate::Full;
+    use crate::expression::Full;
 
     impl<T> ExpressionExt<T> for Full<T>
     where
@@ -463,12 +467,12 @@ mod r#impl {
             &[]
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             &[]
         }
     }
 
-    use crate::Join;
+    use crate::expression::Join;
 
     impl<K, L, R, Left, Right, T> ExpressionExt<T> for Join<K, L, R, Left, Right, T>
     where
@@ -497,7 +501,7 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
@@ -561,7 +565,7 @@ mod r#impl {
             }
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             match self {
                 Mono::Full(exp) => exp.view_dependencies(),
                 Mono::Empty(exp) => exp.view_dependencies(),
@@ -579,7 +583,7 @@ mod r#impl {
         }
     }
 
-    use crate::Product;
+    use crate::expression::Product;
 
     impl<L, R, Left, Right, T> ExpressionExt<T> for Product<L, R, Left, Right, T>
     where
@@ -607,12 +611,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Project;
+    use crate::expression::Project;
 
     impl<S, T, E> ExpressionExt<T> for Project<S, T, E>
     where
@@ -638,12 +642,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Relation;
+    use crate::expression::Relation;
 
     impl<T> ExpressionExt<T> for Relation<T>
     where
@@ -667,12 +671,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             &[]
         }
     }
 
-    use crate::Select;
+    use crate::expression::Select;
 
     impl<T, E> ExpressionExt<T> for Select<T, E>
     where
@@ -697,12 +701,12 @@ mod r#impl {
             self.relation_deps()
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             self.view_deps()
         }
     }
 
-    use crate::Singleton;
+    use crate::expression::Singleton;
 
     impl<T> ExpressionExt<T> for Singleton<T>
     where
@@ -726,7 +730,7 @@ mod r#impl {
             &[]
         }
 
-        fn view_dependencies(&self) -> &[view::ViewRef] {
+        fn view_dependencies(&self) -> &[ViewRef] {
             &[]
         }
     }

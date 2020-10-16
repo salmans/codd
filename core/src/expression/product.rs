@@ -10,7 +10,7 @@ use std::{
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Product};
+/// use codd::{Database, expression::Product};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation::<i32>("R").unwrap();

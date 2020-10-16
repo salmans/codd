@@ -10,7 +10,7 @@ pub struct ViewRef(pub(crate) i32);
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Product, View};
+/// use codd::{Database, expression::{Product, View}};
 ///
 /// let mut db = Database::new();
 /// let dividends = db.add_relation("dividends").unwrap();

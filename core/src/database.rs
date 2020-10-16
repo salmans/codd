@@ -12,8 +12,8 @@ mod instance;
 mod validate;
 
 use crate::{
-    expression::{dependency, view::ViewRef},
-    Error, Expression, Relation, Tuple, View,
+    expression::{dependency, view::ViewRef, Expression, Relation, View},
+    Error, Tuple,
 };
 use expression_ext::ExpressionExt;
 pub use instance::Tuples;
@@ -131,7 +131,7 @@ impl Clone for ViewEntry {
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Select};
+/// use codd::{Database, expression::Select};
 ///
 /// // create a new database:
 /// let mut db = Database::new();

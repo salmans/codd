@@ -62,6 +62,17 @@ where
         }
     }
 
+    pub fn difference<Right, I>(self, other: I) -> Builder<L, Difference<L, Left, Right>>
+    where
+        Right: Expression<L>,
+        I: IntoExpression<L, Right>,
+    {
+        Builder {
+            expression: Difference::new(&self.expression, &other.into_expression()),
+            _marker: PhantomData,
+        }
+    }
+
     pub fn union<Right, I>(self, other: I) -> Builder<L, Union<L, Left, Right>>
     where
         Right: Expression<L>,

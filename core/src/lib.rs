@@ -9,10 +9,6 @@ pub mod expression;
 mod macros;
 
 pub use database::{Database, Tuples};
-pub use expression::{
-    Difference, Empty, Expression, Full, Intersect, Join, Product, Project, Relation, Select,
-    Singleton, Union, View,
-};
 use thiserror::Error;
 
 /// Is the trait of tuples (analogous to the rows of a relational table).

@@ -10,7 +10,7 @@ use std::{
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Select};
+/// use codd::{Database, expression::Select};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation::<String>("Fruit").unwrap();
