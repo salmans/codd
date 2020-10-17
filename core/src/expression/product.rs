@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::{
     cell::{RefCell, RefMut},
@@ -10,7 +10,7 @@ use std::{
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Product};
+/// use codd::{Database, expression::Product};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation::<i32>("R").unwrap();
@@ -49,8 +49,14 @@ where
 {
     /// Creates a `Product` expression over `left` and `right` with `mapper` as the closure
     /// that produces the tuples of the resulting expression from tuples of `left` and `right`.
-    pub fn new(left: &Left, right: &Right, project: impl FnMut(&L, &R) -> T + 'static) -> Self {
+    pub fn new<IL, IR>(left: IL, right: IR, project: impl FnMut(&L, &R) -> T + 'static) -> Self
+    where
+        IL: IntoExpression<L, Left>,
+        IR: IntoExpression<R, Right>,
+    {
         use super::dependency;
+        let left = left.into_expression();
+        let right = right.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         left.visit(&mut deps);

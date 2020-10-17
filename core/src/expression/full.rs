@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Full};
+/// use codd::{Database, expression::Full};
 ///
 /// let mut db = Database::new();
 /// let full = Full::<i32>::new();

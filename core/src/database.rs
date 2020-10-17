@@ -12,8 +12,8 @@ mod instance;
 mod validate;
 
 use crate::{
-    expression::{dependency, view::ViewRef},
-    Error, Expression, Relation, Tuple, View,
+    expression::{dependency, view::ViewRef, Expression, IntoExpression, Relation, View},
+    Error, Tuple,
 };
 use expression_ext::ExpressionExt;
 pub use instance::Tuples;
@@ -131,7 +131,7 @@ impl Clone for ViewEntry {
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Select};
+/// use codd::{Database, expression::Select};
 ///
 /// // create a new database:
 /// let mut db = Database::new();
@@ -140,7 +140,7 @@ impl Clone for ViewEntry {
 /// let numbers = db.add_relation::<u32>("numbers").unwrap();
 ///
 /// // create a view for odd numbers in `numbers`:
-/// let odds = db.store_view(&Select::new(&numbers, |i| i % 2 == 1)).unwrap();
+/// let odds = db.store_view(Select::new(numbers.clone(), |i| i % 2 == 1)).unwrap();
 ///
 /// // insert some items in `numbers`:
 /// db.insert(&numbers, vec![4, 8, 15, 16, 23, 42].into()).unwrap();
@@ -230,17 +230,19 @@ impl Database {
     /// Stores a new view over `expression` and returns the corresponding [`View`] expression.
     ///
     /// [`View`]: ./expression/struct.View.html
-    pub fn store_view<T, E>(&mut self, expression: &E) -> Result<View<T, E>, Error>
+    pub fn store_view<T, E, I>(&mut self, expression: I) -> Result<View<T, E>, Error>
     where
         T: Tuple + 'static,
         E: ExpressionExt<T> + 'static,
+        I: IntoExpression<T, E>,
     {
+        let expression = expression.into_expression();
         // `validator` rejects views over `Difference` (not supported):
-        validate::validate_view_expression(expression)?;
+        validate::validate_view_expression(&expression)?;
 
-        let (relation_deps, view_deps) = dependency::expression_dependencies(expression);
+        let (relation_deps, view_deps) = dependency::expression_dependencies(&expression);
 
-        let mut entry = ViewEntry::new(ViewInstance::new(expression.clone()));
+        let mut entry = ViewEntry::new(ViewInstance::new(expression));
         let reference = ViewRef(self.view_counter);
 
         // track relation dependencies of this view:
@@ -417,7 +419,7 @@ mod tests {
         {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
-            let v = database.store_view(&a).unwrap();
+            let v = database.store_view(a.clone()).unwrap();
             database.insert(&a, vec![1, 2, 3].into()).unwrap();
 
             let cloned = database.clone();
@@ -463,26 +465,26 @@ mod tests {
         {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
-            database.store_view(&a).unwrap();
+            database.store_view(a.clone()).unwrap();
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
         }
         {
             let mut database = Database::new();
             let _ = database.add_relation::<i32>("a").unwrap();
-            database.store_view(&Relation::<i32>::new("a")).unwrap();
+            database.store_view(Relation::<i32>::new("a")).unwrap();
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
         }
         {
             let mut database = Database::new();
-            assert!(database.store_view(&Relation::<i32>::new("a")).is_err());
+            assert!(database.store_view(Relation::<i32>::new("a")).is_err());
         }
 
         {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
-            database.store_view(&Select::new(&a, |&t| t != 0)).unwrap();
+            database.store_view(Select::new(a, |&t| t != 0)).unwrap();
 
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
@@ -491,7 +493,7 @@ mod tests {
         {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
-            database.store_view(&Project::new(&a, |t| t + 1)).unwrap();
+            database.store_view(Project::new(a, |t| t + 1)).unwrap();
 
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
@@ -502,7 +504,7 @@ mod tests {
             let a = database.add_relation::<(i32, i32)>("a").unwrap();
             let b = database.add_relation::<(i32, i32)>("b").unwrap();
             database
-                .store_view(&Join::new(&a, &b, |t| t.0, |t| t.0, |_, &l, &r| (l, r)))
+                .store_view(Join::new(a, b, |t| t.0, |t| t.0, |_, &l, &r| (l, r)))
                 .unwrap();
 
             assert!(database.views.get(&ViewRef(0)).is_some());
@@ -512,8 +514,9 @@ mod tests {
         {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
-            let view = database.store_view(&a).unwrap();
-            database.store_view(&view).unwrap();
+            let view = database.store_view(a).unwrap();
+
+            database.store_view(view).unwrap();
             assert!(database.views.get(&ViewRef(0)).is_some());
             assert!(database.views.get(&ViewRef(1)).is_some());
             assert!(database.views.get(&ViewRef(1000)).is_none());
@@ -524,7 +527,7 @@ mod tests {
     fn test_get_view() {
         let mut database = Database::new();
         let _ = database.add_relation::<i32>("a").unwrap();
-        let view = database.store_view(&Relation::<i32>::new("a")).unwrap();
+        let view = database.store_view(Relation::<i32>::new("a")).unwrap();
 
         assert!(database.view_instance(&view).is_ok());
     }

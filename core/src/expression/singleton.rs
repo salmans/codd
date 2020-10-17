@@ -5,7 +5,7 @@ use crate::Tuple;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Singleton};
+/// use codd::{Database, expression::Singleton};
 ///
 /// let mut db = Database::new();
 /// let hello = Singleton::new("Hello".to_string());

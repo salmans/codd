@@ -20,12 +20,19 @@ cd codd
 cargo build
 ```
 
-## Example: music database
+## Example: [music](https://github.com/salmans/codd/blob/master/core/examples/music.rs)
+
+Add `codd` to your project dependencies in Cargo.toml:
+
+```
+[dependencies]
+codd = "0.1"
+```
 
 Use `codd` in your code:
 
 ```rust
-use codd::{Database, Error};
+use codd::{Database, Error, Expression};
 ```
 
 Create a new database:
@@ -59,11 +66,6 @@ Insert tuples (records) into your database relations:
                 band: None,
                 instruments: vec![Vocals],
             },
-            Musician {
-                name: "Conor Mason".into(),
-                band: Some("Nothing But Thieves".into()),
-                instruments: vec![Vocals, Guitar],
-            },
             ...
         ]
         .into(),
@@ -96,10 +98,6 @@ Insert tuples (records) into your database relations:
                 title: "bad guy".into(),
                 artist: Either::Left("Billie Eilish".into()),
             },
-            Song {
-                title: "excuse me".into(),
-                artist: Either::Left("Nothing But Thieves".into()),
-            },
             ...
         ]
         .into(),
@@ -109,13 +107,12 @@ Insert tuples (records) into your database relations:
 Construct query expressions and evaluate them in the database:
 
 ```rust
-    use codd::{Project, Select};
-    
-    // Select all guitar players from the `musician` relation.
-    let guitarists = Select::new(&musician, |m| m.instruments.contains(&Guitar));
-    
-    // Project the name of guitar players.
-    let guitarist_names = Project::new(&guitarists, |g| g.name.to_string());
+
+    let guitarist_name = musician
+        .builder()
+        .select(|m| m.instruments.contains(&Guitar))
+        .project(|g| g.name.to_string())
+        .build();
 
     assert_eq!(
         vec![
@@ -123,42 +120,41 @@ Construct query expressions and evaluate them in the database:
             "Conor Mason".into(),
             "John Petrucci".into(),
         ],
-        music.evaluate(&guitarist_names)?.into_tuples() // evaluate the query and get the results
+        music.evaluate(&guitarist_name)?.into_tuples() // evaluate the query and get the results
     );
 ```
 
 Here is a more complex query:
 
 ```rust
-    use codd::Join;
-    
-    // Query the names of Dream Theater's members.
-    let dt_members = Project::new(
-        &Select::new(
-            &Join::new( // joining `musician` and `band`
-                &musician,
-                &band,
-                |m| m.band.clone(),       // the join key for `musician` (band name)
-                |b| Some(b.name.clone()), // the join key for `band`
-                |_, m, b| (m.name.to_string(), b.name.to_string()), // joining closure
-            ),
-            |m| m.1 == "Dream Theater", // selecting predicate
-        ),
-        |m| m.0.to_string(), // projecting clousre
-    );
+    let dt_member = musician
+        .builder()
+        .with_key(|m| m.band.clone())
+            // use `band` as the join key for `musician`
+        .join(band.builder().with_key(|b| Some(b.name.clone()))) 
+            // join with `band` with `name` as the join key
+        .on(|_, m, b| (m.name.to_string(), b.name.to_string()))
+            // combine tuples of `musician` and `band` in a new relation
+        .select(|m| m.1 == "Dream Theater")
+        .project(|m| m.0.to_string())
+        .build();
 
     assert_eq!(
         vec!["John Petrucci".to_string(), "Jordan Rudess".into()],
-        music.evaluate(&dt_members)?.into_tuples()
+        music.evaluate(&dt_member)?.into_tuples()
     );
 ```
 
 Store views of expressions:
 
 ```rust
-    let dt_members_view = music.store_view(&dt_members)?; // view over Dream Theater member names
-    let drummers_view =
-        music.store_view(&Select::new(&musician, |m| m.instruments.contains(&Drums)))?; // view over drummers
+    let dt_member_view = music.store_view(dt_members)?; // view on `dt_member`
+    let drummer_view = music.store_view(                // drummers view
+        musician
+            .builder()
+            .select(|m| m.instruments.contains(&Drums))
+            .build(),
+    )?;
 
     // inserting more tuples:
     music.insert(
@@ -192,7 +188,7 @@ Store views of expressions:
                 instruments: vec![Drums]
             }
         ],
-        music.evaluate(&drummers_view)?.into_tuples()
+        music.evaluate(&drummer_view)?.into_tuples()
     );
     assert_eq!(
         vec![
@@ -201,7 +197,7 @@ Store views of expressions:
             "Jordan Rudess".into(),
             "Mike Mangini".into()
         ],
-        music.evaluate(&dt_members_view)?.into_tuples()
+        music.evaluate(&dt_member_view)?.into_tuples()
     );
 
     Ok(())

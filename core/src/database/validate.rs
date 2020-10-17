@@ -1,5 +1,5 @@
 use crate::{
-    expression::{Expression, Visitor},
+    expression::{Difference, Expression, Visitor},
     Error, Tuple,
 };
 
@@ -22,11 +22,11 @@ impl ViewExpressionValidator {
 }
 
 impl Visitor for ViewExpressionValidator {
-    fn visit_difference<T, L, R>(&mut self, _: &crate::Difference<T, L, R>)
+    fn visit_difference<T, L, R>(&mut self, _: &Difference<T, L, R>)
     where
         T: Tuple,
-        L: crate::Expression<T>,
-        R: crate::Expression<T>,
+        L: Expression<T>,
+        R: Expression<T>,
     {
         self.0 = Some(Error::UnsupportedExpression {
             name: "Difference".to_string(),

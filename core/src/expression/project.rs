@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::{
     cell::{RefCell, RefMut},
@@ -10,7 +10,7 @@ use std::{
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Project};
+/// use codd::{Database, expression::Project};
 ///
 /// let mut db = Database::new();
 /// let fruit = db.add_relation::<String>("R").unwrap();
@@ -45,8 +45,12 @@ where
 {
     /// Creates a new `Project` expression over `expression` with a closure `mapper` that
     /// projects tuples of `expression` to the resulting tuples.
-    pub fn new(expression: &E, mapper: impl FnMut(&S) -> T + 'static) -> Self {
+    pub fn new<I>(expression: I, mapper: impl FnMut(&S) -> T + 'static) -> Self
+    where
+        I: IntoExpression<S, E>,
+    {
         use super::dependency;
+        let expression = expression.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         expression.visit(&mut deps);

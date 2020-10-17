@@ -130,12 +130,3 @@ impl<T: Tuple + 'static> Expression<T> for Mono<T> {
         }
     }
 }
-
-impl<T: Tuple + 'static> Expression<T> for Box<Mono<T>> {
-    fn visit<V>(&self, visitor: &mut V)
-    where
-        V: Visitor,
-    {
-        (**self).visit(visitor)
-    }
-}

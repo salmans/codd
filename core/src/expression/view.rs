@@ -10,7 +10,7 @@ pub struct ViewRef(pub(crate) i32);
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Product, View};
+/// use codd::{Database, expression::{Product, View}};
 ///
 /// let mut db = Database::new();
 /// let dividends = db.add_relation("dividends").unwrap();
@@ -21,11 +21,11 @@ pub struct ViewRef(pub(crate) i32);
 ///
 /// // divide all elements of `dividends` by all elements of `divisors`:
 /// let quotients = Product::new(
-///     &dividends,
-///     &divisors,
+///     dividends.clone(),
+///     divisors.clone(),
 ///     |&l, &r| l/r
 /// );
-/// let view = db.store_view(&quotients).unwrap();
+/// let view = db.store_view(quotients.clone()).unwrap();
 ///
 /// // `view` and `quotients` evaluate to the same result:
 /// assert_eq!(vec![2, 3, 4, 6, 9], db.evaluate(&quotients).unwrap().into_tuples());
@@ -42,7 +42,7 @@ pub struct ViewRef(pub(crate) i32);
 ///
 /// use codd::expression::Difference;
 /// // incremental view update for `Difference` is currently not supported:
-/// assert!(db.store_view(&Difference::new(&dividends, &divisors)).is_err());
+/// assert!(db.store_view(Difference::new(dividends, divisors)).is_err());
 /// ```
 #[derive(Clone, Debug)]
 pub struct View<T, E>
@@ -103,7 +103,7 @@ mod tests {
     fn test_clone() {
         let mut database = Database::new();
         let r = database.add_relation::<i32>("r").unwrap();
-        let v = database.store_view(&r).unwrap().clone();
+        let v = database.store_view(r.clone()).unwrap().clone();
         database.insert(&r, vec![1, 2, 3].into()).unwrap();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 2, 3]),

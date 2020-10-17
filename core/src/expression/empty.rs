@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Empty};
+/// use codd::{Database, expression::Empty};
 ///
 /// let mut db = Database::new();
 /// let empty = Empty::<i32>::new();

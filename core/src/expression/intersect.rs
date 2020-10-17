@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Intersect};
+/// use codd::{Database, expression::Intersect};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation::<i32>("R").unwrap();
@@ -40,8 +40,14 @@ where
     R: Expression<T>,
 {
     /// Creates a new instance of `Intersect` for `left ∩ right`.
-    pub fn new(left: &L, right: &R) -> Self {
+    pub fn new<IL, IR>(left: IL, right: IR) -> Self
+    where
+        IL: IntoExpression<T, L>,
+        IR: IntoExpression<T, R>,
+    {
         use super::dependency;
+        let left = left.into_expression();
+        let right = right.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         left.visit(&mut deps);
@@ -108,7 +114,7 @@ mod tests {
         let s = database.add_relation::<i32>("s").unwrap();
         database.insert(&r, vec![1, 2, 3].into()).unwrap();
         database.insert(&s, vec![1, 4, 3, 5].into()).unwrap();
-        let u = Intersect::new(&r, &s).clone();
+        let u = Intersect::new(r, s).clone();
         assert_eq!(
             Tuples::<i32>::from(vec![1, 3]),
             database.evaluate(&u).unwrap()

@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Relation};
+/// use codd::{Database, expression::Relation};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation("R").unwrap();
@@ -31,10 +31,14 @@ where
     T: Tuple,
 {
     /// Creates a new `Relation` with a given `name`.
-    pub fn new(name: &str) -> Self {
+    pub fn new<S>(name: S) -> Self
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
         Self {
-            name: name.into(),
-            relation_deps: vec![name.into()],
+            relation_deps: vec![name.clone()],
+            name,
             _phantom: PhantomData,
         }
     }

@@ -1,4 +1,4 @@
-use super::{view::ViewRef, Expression, Visitor};
+use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 ///
 /// **Example**:
 /// ```rust
-/// use codd::{Database, Union};
+/// use codd::{Database, expression::Union};
 ///
 /// let mut db = Database::new();
 /// let r = db.add_relation::<i32>("R").unwrap();
@@ -40,8 +40,14 @@ where
     R: Expression<T>,
 {
     /// Creates a new instance of `Union` for `left ∪ right`.
-    pub fn new(left: &L, right: &R) -> Self {
+    pub fn new<IL, IR>(left: IL, right: IR) -> Self
+    where
+        IL: IntoExpression<T, L>,
+        IR: IntoExpression<T, R>,
+    {
         use super::dependency;
+        let left = left.into_expression();
+        let right = right.into_expression();
 
         let mut deps = dependency::DependencyVisitor::new();
         left.visit(&mut deps);

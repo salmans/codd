@@ -1,4 +1,4 @@
-use codd::{Database, Error};
+use codd::{Database, Error, Expression};
 use either::Either;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -145,9 +145,11 @@ fn main() -> Result<(), Error> {
         .into(),
     )?;
 
-    use codd::{Project, Select};
-    let guitarists = Select::new(&musician, |m| m.instruments.contains(&Guitar));
-    let guitarist_names = Project::new(&guitarists, |g| g.name.to_string());
+    let guitarist_name = musician
+        .builder()
+        .select(|m| m.instruments.contains(&Guitar))
+        .project(|g| g.name.to_string())
+        .build();
 
     assert_eq!(
         vec![
@@ -155,32 +157,30 @@ fn main() -> Result<(), Error> {
             "Conor Mason".into(),
             "John Petrucci".into(),
         ],
-        music.evaluate(&guitarist_names)?.into_tuples()
+        music.evaluate(&guitarist_name)?.into_tuples()
     );
 
-    use codd::Join;
-    let dt_members = Project::new(
-        &Select::new(
-            &Join::new(
-                &musician,
-                &band,
-                |m| m.band.clone(),
-                |b| Some(b.name.clone()),
-                |_, m, b| (m.name.to_string(), b.name.to_string()),
-            ),
-            |m| m.1 == "Dream Theater",
-        ),
-        |m| m.0.to_string(),
-    );
+    let dt_member = musician
+        .builder()
+        .with_key(|m| m.band.clone())
+        .join(band.builder().with_key(|b| Some(b.name.clone())))
+        .on(|_, m, b| (m.name.to_string(), b.name.to_string()))
+        .select(|m| m.1 == "Dream Theater")
+        .project(|m| m.0.to_string())
+        .build();
 
     assert_eq!(
         vec!["John Petrucci".to_string(), "Jordan Rudess".into()],
-        music.evaluate(&dt_members)?.into_tuples()
+        music.evaluate(&dt_member)?.into_tuples()
     );
 
-    let dt_members_view = music.store_view(&dt_members)?;
-    let drummers_view =
-        music.store_view(&Select::new(&musician, |m| m.instruments.contains(&Drums)))?;
+    let dt_member_view = music.store_view(dt_member)?;
+    let drummer_view = music.store_view(
+        musician
+            .builder()
+            .select(|m| m.instruments.contains(&Drums))
+            .build(),
+    )?;
 
     music.insert(
         &musician,
@@ -212,7 +212,7 @@ fn main() -> Result<(), Error> {
                 instruments: vec![Drums]
             }
         ],
-        music.evaluate(&drummers_view)?.into_tuples()
+        music.evaluate(&drummer_view)?.into_tuples()
     );
     assert_eq!(
         vec![
@@ -221,7 +221,7 @@ fn main() -> Result<(), Error> {
             "Jordan Rudess".into(),
             "Mike Mangini".into()
         ],
-        music.evaluate(&dt_members_view)?.into_tuples()
+        music.evaluate(&dt_member_view)?.into_tuples()
     );
 
     Ok(())
