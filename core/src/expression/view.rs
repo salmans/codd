@@ -44,7 +44,7 @@ pub struct ViewRef(pub(crate) i32);
 /// // incremental view update for `Difference` is currently not supported:
 /// assert!(db.store_view(Difference::new(dividends, divisors)).is_err());
 /// ```
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct View<T, E>
 where
     T: Tuple,
