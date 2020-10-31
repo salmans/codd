@@ -9,3 +9,6 @@ edition = "2018"
 [dependencies]
 thiserror = "^1.0"
 either = "^1.6"
+
+[features]
+unstable = []
