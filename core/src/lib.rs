@@ -3,9 +3,11 @@ in the database.
 
 [database]: ./struct.Database.html
 [expressions]: ./expression/index.html
-*/
+ */
 mod database;
 pub mod expression;
+
+#[cfg(feature = "unstable")]
 mod macros;
 
 pub use database::{Database, Tuples};
