@@ -1,12 +1,12 @@
 # codd
 
-`codd` (named after [Edgar F. Codd](https://en.wikipedia.org/wiki/Edgar_F._Codd)) is a library for evaluating *typed* relational expressions in a minimal in-memory database. `codd` is primarily developed to support an implementation of [`razor`](https://github.com/salmans/rusty-razor) based on relational algebra but it is designed to be consistent with common concepts in database theory and may be used as a minimal general purpose in-memory database.
+`codd` (named after [Edgar F. Codd](https://en.wikipedia.org/wiki/Edgar_F._Codd)) is a library for evaluating *typed* relational expressions in a monotonically growing minimal database in memory. `codd` is primarily developed to support an implementation of [`razor`](https://github.com/salmans/rusty-razor) based on relational algebra, however, its design is consistent with common concepts of database theory and may be used as a minimal general purpose database.
 
 The implementation of database instances in `codd` is borrowed from [`datafrog`](https://github.com/rust-lang/datafrog):
 * `Instance<T>` (`Variable<T>` in `datafrog`) contains tuples of type `T`,
 * Incremental view maintenance is implemented by maintaining tuples of `Instance<T>` in three sets of `to_add` (candidate tuples to be inserted), `recent` (recently added tuples), and `stable` (old tuples that have been reflected in all views).
 
-Unlike `datafrog`, `codd` distinguishes relation instances from views and offers the trait `Expression<T>` and types that implement `Expression<T>` to query the database.
+In contrast, `codd` distinguishes relation instances from views and offers the trait `Expression<T>` and types that implement `Expression<T>` to query a database.
 
 The relational algebra and database terminology in `codd` is adopted from [Alice's book](http://webdam.inria.fr/Alice/).
 
@@ -50,7 +50,7 @@ Add relations to the database:
     let song = music.add_relation("song")?;
 ```
 
-Insert tuples (records) into your database relations:
+Insert tuples (records) to your database relations:
 
 ```rust
     music.insert(
@@ -66,42 +66,12 @@ Insert tuples (records) into your database relations:
                 band: None,
                 instruments: vec![Vocals],
             },
-            ...
+            // more tuples...
         ]
         .into(),
     )?;
     
-    music.insert(
-        &band,
-        vec![
-            Band {
-                name: "Dream Theater".into(),
-                genre: "Progressive Metal".into(),
-            },
-            Band {
-                name: "Nothing But Thieves".into(),
-                genre: "Alternative Rock".into(),
-            },
-            ...
-        ]
-        .into(),
-    )?;
-
-    music.insert(
-        &song,
-        vec![
-            Song {
-                title: "pull me under".into(),
-                artist: Either::Right("Dream Theater".into()),
-            },
-            Song {
-                title: "bad guy".into(),
-                artist: Either::Left("Billie Eilish".into()),
-            },
-            ...
-        ]
-        .into(),
-    )?;
+    // add tuples to other relations...
 ```
 
 Construct query expressions and evaluate them in the database:
