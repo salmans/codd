@@ -1,9 +1,4 @@
-/*! Defines relational algebraic expressions as generic over [`Tuple`] types and
-can be evaluated in [`Database`].
-
-[`Tuple`]: ../trait.Tuple.html
-[`Database`]: ./database/struct.Database.html
-*/
+/*! Defines relational algebraic expressions as generic types over `Tuple` types.*/
 mod builder;
 pub(crate) mod dependency;
 mod difference;
@@ -36,16 +31,16 @@ pub use singleton::Singleton;
 pub use union::Union;
 pub use view::View;
 
-/// Is the trait of expressions in relational algebra that can be evaluated in
-/// a database.
+/// Is the trait of expressions in relational algebra that can be evaluated in a database.
 pub trait Expression<T: Tuple>: Clone + std::fmt::Debug {
-    /// Visits this node by a [`Visitor`].
+    /// Visits this expression by a [`Visitor`].
     ///
     /// [`Visitor`]: ./trait.Visitor.html
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor;
 
+    /// Returns an expression builder over this expression.
     fn builder(&self) -> Builder<T, Self> {
         Builder::from(self.clone())
     }
@@ -99,8 +94,9 @@ where
     }
 }
 
-/// Is the trait of objects that visit [`Expression`]s. The default implementation guides
-/// the visitor through all subexpressions of the expressions that is visited.
+/// Is the trait of objects that visit sub-expressions of an [`Expression`]. The default
+/// implementation guides the visitor through all sub-expressions of the expressions that
+/// is visited.
 ///
 /// [`Expression`]: ./trait.Expression.html
 pub trait Visitor: Sized {

@@ -2,7 +2,7 @@ use super::{Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
-/// Is a placeholder for a "full" instance, containing *all* tuples of type `T`.
+/// Is a placeholder for a "full" instance, containing *all* tuples of its type.
 ///
 /// **Note**: because `Full` expression cannot be described by a range-restricted
 /// (see [chapter 2] of Foundations of Databases) query, any query containing
@@ -48,5 +48,11 @@ where
         V: Visitor,
     {
         visitor.visit_full(&self);
+    }
+}
+
+impl<T: Tuple> Default for Full<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }

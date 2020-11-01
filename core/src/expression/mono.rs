@@ -12,6 +12,7 @@ use super::*;
 /// [`Tuple`]: ../trait.Tuple.html
 /// [expression]: ./trait.Expression.html
 #[derive(Clone, Debug)]
+#[allow(clippy::type_complexity)]
 pub enum Mono<T>
 where
     T: Tuple + 'static,
@@ -20,14 +21,14 @@ where
     Empty(Empty<T>),
     Singleton(Singleton<T>),
     Relation(Relation<T>),
-    Select(Select<T, Box<Mono<T>>>),
-    Project(Project<T, T, Box<Mono<T>>>),
-    Union(Union<T, Box<Mono<T>>, Box<Mono<T>>>),
-    Intersect(Intersect<T, Box<Mono<T>>, Box<Mono<T>>>),
-    Difference(Difference<T, Box<Mono<T>>, Box<Mono<T>>>),
-    Product(Product<T, T, Box<Mono<T>>, Box<Mono<T>>, T>),
-    Join(Join<T, T, T, Box<Mono<T>>, Box<Mono<T>>, T>),
-    View(View<T, Box<Mono<T>>>),
+    Select(Box<Select<T, Mono<T>>>),
+    Project(Box<Project<T, T, Mono<T>>>),
+    Union(Box<Union<T, Mono<T>, Mono<T>>>),
+    Intersect(Box<Intersect<T, Mono<T>, Mono<T>>>),
+    Difference(Box<Difference<T, Mono<T>, Mono<T>>>),
+    Product(Box<Product<T, T, Mono<T>, Mono<T>, T>>),
+    Join(Box<Join<T, T, T, Mono<T>, Mono<T>, T>>),
+    View(Box<View<T, Mono<T>>>),
 }
 
 impl<T: Tuple + 'static> Mono<T> {
@@ -61,51 +62,51 @@ impl<T: Tuple> From<Relation<T>> for Mono<T> {
     }
 }
 
-impl<T: Tuple> From<Select<T, Box<Mono<T>>>> for Mono<T> {
-    fn from(select: Select<T, Box<Mono<T>>>) -> Self {
-        Self::Select(select)
+impl<T: Tuple> From<Select<T, Mono<T>>> for Mono<T> {
+    fn from(select: Select<T, Mono<T>>) -> Self {
+        Self::Select(Box::new(select))
     }
 }
 
-impl<T: Tuple> From<Project<T, T, Box<Mono<T>>>> for Mono<T> {
-    fn from(project: Project<T, T, Box<Mono<T>>>) -> Self {
-        Self::Project(project)
+impl<T: Tuple> From<Project<T, T, Mono<T>>> for Mono<T> {
+    fn from(project: Project<T, T, Mono<T>>) -> Self {
+        Self::Project(Box::new(project))
     }
 }
 
-impl<T: Tuple> From<Union<T, Box<Mono<T>>, Box<Mono<T>>>> for Mono<T> {
-    fn from(union: Union<T, Box<Mono<T>>, Box<Mono<T>>>) -> Self {
-        Self::Union(union)
+impl<T: Tuple> From<Union<T, Mono<T>, Mono<T>>> for Mono<T> {
+    fn from(union: Union<T, Mono<T>, Mono<T>>) -> Self {
+        Self::Union(Box::new(union))
     }
 }
 
-impl<T: Tuple> From<Intersect<T, Box<Mono<T>>, Box<Mono<T>>>> for Mono<T> {
-    fn from(intersect: Intersect<T, Box<Mono<T>>, Box<Mono<T>>>) -> Self {
-        Self::Intersect(intersect)
+impl<T: Tuple> From<Intersect<T, Mono<T>, Mono<T>>> for Mono<T> {
+    fn from(intersect: Intersect<T, Mono<T>, Mono<T>>) -> Self {
+        Self::Intersect(Box::new(intersect))
     }
 }
 
-impl<T: Tuple> From<Difference<T, Box<Mono<T>>, Box<Mono<T>>>> for Mono<T> {
-    fn from(difference: Difference<T, Box<Mono<T>>, Box<Mono<T>>>) -> Self {
-        Self::Difference(difference)
+impl<T: Tuple> From<Difference<T, Mono<T>, Mono<T>>> for Mono<T> {
+    fn from(difference: Difference<T, Mono<T>, Mono<T>>) -> Self {
+        Self::Difference(Box::new(difference))
     }
 }
 
-impl<T: Tuple> From<Product<T, T, Box<Mono<T>>, Box<Mono<T>>, T>> for Mono<T> {
-    fn from(product: Product<T, T, Box<Mono<T>>, Box<Mono<T>>, T>) -> Self {
-        Self::Product(product)
+impl<T: Tuple> From<Product<T, T, Mono<T>, Mono<T>, T>> for Mono<T> {
+    fn from(product: Product<T, T, Mono<T>, Mono<T>, T>) -> Self {
+        Self::Product(Box::new(product))
     }
 }
 
-impl<T: Tuple> From<Join<T, T, T, Box<Mono<T>>, Box<Mono<T>>, T>> for Mono<T> {
-    fn from(join: Join<T, T, T, Box<Mono<T>>, Box<Mono<T>>, T>) -> Self {
-        Self::Join(join)
+impl<T: Tuple> From<Join<T, T, T, Mono<T>, Mono<T>, T>> for Mono<T> {
+    fn from(join: Join<T, T, T, Mono<T>, Mono<T>, T>) -> Self {
+        Self::Join(Box::new(join))
     }
 }
 
-impl<T: Tuple> From<View<T, Box<Mono<T>>>> for Mono<T> {
-    fn from(view: View<T, Box<Mono<T>>>) -> Self {
-        Self::View(view)
+impl<T: Tuple> From<View<T, Mono<T>>> for Mono<T> {
+    fn from(view: View<T, Mono<T>>) -> Self {
+        Self::View(Box::new(view))
     }
 }
 

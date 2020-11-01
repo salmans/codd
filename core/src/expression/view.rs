@@ -69,13 +69,13 @@ where
         }
     }
 
-    /// Returns the reference of this view.
+    /// Returns the reference to this view.
     #[inline(always)]
     pub(crate) fn reference(&self) -> &ViewRef {
         &self.reference
     }
 
-    /// Returns a reference to view dependencies of the receiver.
+    /// Returns a reference to the view dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps

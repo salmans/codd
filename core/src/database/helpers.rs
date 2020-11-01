@@ -5,19 +5,19 @@
 /// [`datafrog`]: https://github.com/rust-lang/datafrog
 #[inline(always)]
 pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T] {
-    if slice.len() > 0 && cmp(&slice[0]) {
+    if !slice.is_empty() && cmp(&slice[0]) {
         let mut step = 1;
         while step < slice.len() && cmp(&slice[step]) {
             slice = &slice[step..];
-            step = step << 1;
+            step <<= 1;
         }
 
-        step = step >> 1;
+        step >>= 1;
         while step > 0 {
             if step < slice.len() && cmp(&slice[step]) {
                 slice = &slice[step..];
             }
-            step = step >> 1;
+            step >>= 1;
         }
 
         slice = &slice[1..];
@@ -73,8 +73,8 @@ pub(crate) fn join_helper<Key: Ord, L, R>(
                 let count2 = slice2.iter().take_while(|x| x.0 == slice2[0].0).count();
 
                 for index1 in 0..count1 {
-                    for index2 in 0..count2 {
-                        result(&slice1[0].0, &slice1[index1].1, &slice2[index2].1);
+                    for item in slice2.iter().take(count2) {
+                        result(&slice1[0].0, &slice1[index1].1, &item.1);
                     }
                 }
 
@@ -117,19 +117,19 @@ pub(crate) fn diff_helper<T: Ord>(left: &[T], right: &[&[T]], mut result: impl F
 
     for tuple in left {
         let mut to_add = true;
-        for i in 0..right.len() {
+        for mut to_find in &mut right {
             use std::cmp::Ordering;
 
-            if !right[i].is_empty() {
-                match tuple.cmp(&right[i][0]) {
+            if !to_find.is_empty() {
+                match tuple.cmp(&to_find[0]) {
                     Ordering::Less => {}
                     Ordering::Equal => {
-                        right[i] = &right[i][1..];
                         to_add = false;
                     }
                     Ordering::Greater => {
-                        right[i] = &gallop(right[i], |x| x < &tuple);
-                        if !right[i].is_empty() && tuple == &right[i][0] {
+                        let mut temp = gallop(to_find, |x| x < tuple);
+                        to_find = &mut temp;
+                        if !to_find.is_empty() && tuple == &to_find[0] {
                             to_add = false;
                         }
                     }

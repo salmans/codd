@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-/// Selects tuples of the underlying expression according to a given predicate.
+/// Selects tuples of the underlying sub-expression according to a given predicate.
 ///
 /// **Example**:
 /// ```rust
@@ -62,7 +62,7 @@ where
         }
     }
 
-    /// Returns a reference to the underlying expression.
+    /// Returns a reference to the underlying sub-expression.
     #[inline(always)]
     pub fn expression(&self) -> &E {
         &self.expression
@@ -74,13 +74,13 @@ where
         self.predicate.borrow_mut()
     }
 
-    /// Returns a reference to relation dependencies of the receiver.
+    /// Returns a reference to the relation dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps
     }
 
-    /// Returns a reference to view dependencies of the receiver.
+    /// Returns a reference to the view dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps

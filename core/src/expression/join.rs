@@ -6,7 +6,11 @@ use std::{
     rc::Rc,
 };
 
-/// Is the join of `left` and `right` expressions.
+/// Is the type of `Join` mapping closures for constructing tuples of type `T` from a key
+/// of type `K`, a left tuple of type `L`, and a right tuple of type `R`.
+type Mapper<K, L, R, T> = dyn FnMut(&K, &L, &R) -> T;
+
+/// Represents the join of its `left` and `right` sub-expressions.
 ///
 /// **Example**:
 /// ```rust
@@ -48,7 +52,7 @@ where
     right: Right,
     left_key: Rc<RefCell<dyn FnMut(&L) -> K>>,
     right_key: Rc<RefCell<dyn FnMut(&R) -> K>>,
-    mapper: Rc<RefCell<dyn FnMut(&K, &L, &R) -> T>>,
+    mapper: Rc<RefCell<Mapper<K, L, R, T>>>,
     relation_deps: Vec<String>,
     view_deps: Vec<ViewRef>,
 }
@@ -65,7 +69,7 @@ where
     /// Creates a new `Join` expression over `left` and `right` where `left_key`
     /// and `right_key` are closures that return the join key for tuples of
     /// `left` and `right` respectively. The closure `mapper` computes the tuples
-    /// of the resulting expression from the join keys and the tuples of `left` and
+    /// of the resulting expression from the join key and the tuples of `left` and
     /// `right`.
     pub fn new<IL, IR>(
         left: IL,
@@ -88,8 +92,8 @@ where
         let (relation_deps, view_deps) = deps.into_dependencies();
 
         Self {
-            left: left.clone(),
-            right: right.clone(),
+            left,
+            right,
             left_key: Rc::new(RefCell::new(left_key)),
             right_key: Rc::new(RefCell::new(right_key)),
             mapper: Rc::new(RefCell::new(mapper)),
@@ -98,27 +102,27 @@ where
         }
     }
 
-    /// Returns a reference to the expression on left.
+    /// Returns a reference to the left sub-expression.
     #[inline(always)]
     pub fn left(&self) -> &Left {
         &self.left
     }
 
-    /// Returns a reference to the expression on right.
+    /// Returns a reference to the right sub-expression.
     #[inline(always)]
     pub fn right(&self) -> &Right {
         &self.right
     }
 
     /// Returns a mutable reference (of type `RefMut`) of the key closure for
-    /// the left expression.
+    /// the left sub-expression.
     #[inline(always)]
     pub(crate) fn left_key_mut(&self) -> RefMut<dyn FnMut(&L) -> K> {
         self.left_key.borrow_mut()
     }
 
     /// Returns a mutable reference (of type `RefMut`) of the key closure for
-    /// the right expression.
+    /// the right sub-expression.
     #[inline(always)]
     pub(crate) fn right_key_mut(&self) -> RefMut<dyn FnMut(&R) -> K> {
         self.right_key.borrow_mut()
@@ -130,13 +134,13 @@ where
         self.mapper.borrow_mut()
     }
 
-    /// Returns a reference to relation dependencies of the receiver.
+    /// Returns a reference to the relation dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps
     }
 
-    /// Returns a reference to view dependencies of the receiver.
+    /// Returns a reference to the view dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps

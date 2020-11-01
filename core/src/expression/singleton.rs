@@ -18,12 +18,12 @@ where
     T: Tuple;
 
 impl<T: Tuple> Singleton<T> {
-    /// Create a new instance of `Singleton` with `tuple` as its inner value.
+    /// Create a new instance of `Singleton` with `tuple` as the inner value.
     pub fn new(tuple: T) -> Self {
         Self(tuple)
     }
 
-    /// Returns the inner value of the receiver.
+    /// Returns a reference to the inner value of the receiver.
     #[inline(always)]
     pub fn tuple(&self) -> &T {
         &self.0

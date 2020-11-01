@@ -276,7 +276,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
     where
         T: Tuple,
     {
-        Ok(Vec::new().into())
+        Ok(Vec::new())
     }
 
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>

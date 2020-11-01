@@ -2,8 +2,8 @@ use super::{Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
-/// Is an expression that points to a relation with tuples of type `T` that identified
-/// by a relation `name`.
+/// Is an expression corresponding to a relation with tuples of type `T` that is identified
+/// by a `name`.
 ///
 /// **Example**:
 /// ```rust
@@ -43,13 +43,13 @@ where
         }
     }
 
-    /// Returns the name of this relation.
+    /// Returns a reference to the name by which the relation is identified.
     #[inline(always)]
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Returns a reference to relation dependencies of the receiver.
+    /// Returns a reference to the relation dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps

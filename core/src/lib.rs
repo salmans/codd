@@ -1,5 +1,4 @@
-/*! Implements a minimal [database] and relational [expressions] for evaluating queries
-in the database.
+/*! Implements a minimal [database] and relational algebraic [expressions] for evaluating queries in the database.
 
 [database]: ./struct.Database.html
 [expressions]: ./expression/index.html
@@ -14,7 +13,9 @@ pub use database::{Database, Tuples};
 pub use expression::Expression;
 use thiserror::Error;
 
-/// Is the trait of tuples (analogous to the rows of a relational table).
+/// Is the trait of tuples. Tuples are the smallest unit of data stored in databases.
+///
+/// **Note**: Tuples are analogous to the rows of a table in a conventional database.
 pub trait Tuple: Ord + Clone + std::fmt::Debug {}
 impl<T: Ord + Clone + std::fmt::Debug> Tuple for T {}
 

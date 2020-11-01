@@ -126,8 +126,7 @@ impl Clone for ViewEntry {
     }
 }
 
-/// Is a database that stores tuples in relation instances and offers and maintains views
-/// over its data.
+/// Stores data in relation instances and implements incremental view maintenance over them.
 ///
 /// **Example**:
 /// ```rust
@@ -187,8 +186,10 @@ impl Database {
         expression.collect_recent(&evaluate::Evaluator::new(self))
     }
 
-    /// Adds a new relation instance identified by `name` to the database and returns the a
-    /// corresponding `Relation` object.
+    /// Adds a new relation instance identified by `name` to the database and returns a
+    /// [`Relation`] object that can be used to access the instance.
+    ///
+    /// [`Relation`]: ./expression/struct.Relation.html    
     pub fn add_relation<T>(&mut self, name: &str) -> Result<Relation<T>, Error>
     where
         T: Tuple + 'static,
@@ -202,7 +203,7 @@ impl Database {
         }
     }
 
-    /// Inserts tuples in the relation `Instance` for `relation`.
+    /// Inserts tuples in the `Instance` corresponding to `relation`.
     pub fn insert<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
     where
         T: Tuple + 'static,
@@ -227,7 +228,8 @@ impl Database {
         Ok(result)
     }
 
-    /// Stores a new view over `expression` and returns the corresponding [`View`] expression.
+    /// Stores a new view over `expression` and returns a [`View`] objeect that can be
+    /// evaluated as a view.
     ///
     /// [`View`]: ./expression/struct.View.html
     pub fn store_view<T, E, I>(&mut self, expression: I) -> Result<View<T, E>, Error>
@@ -247,17 +249,17 @@ impl Database {
 
         // track relation dependencies of this view:
         for r in relation_deps.into_iter() {
-            self.relations
-                .get_mut(&r)
-                .map(|rs| rs.add_dependent_view(reference.clone()));
+            if let Some(rs) = self.relations.get_mut(&r) {
+                rs.add_dependent_view(reference.clone())
+            }
             entry.dependee_relations.insert(r);
         }
 
         // track view dependencies of this view:
         for r in view_deps.into_iter() {
-            self.views
-                .get_mut(&r)
-                .map(|rs| rs.add_dependent_view(reference.clone()));
+            if let Some(rs) = self.views.get_mut(&r) {
+                rs.add_dependent_view(reference.clone())
+            }
             entry.dependee_views.insert(r.clone());
         }
 
@@ -339,6 +341,12 @@ impl Database {
         }
 
         Ok(())
+    }
+}
+
+impl Default for Database {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
