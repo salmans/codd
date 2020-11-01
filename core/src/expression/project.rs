@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-/// Projects the inner expression of type `S` to an expression of type `T`.
+/// Projects the tuples of an inner sub-expression of type `S` to tuples of type `T`.
 ///
 /// **Example**:
 /// ```rust
@@ -57,14 +57,14 @@ where
         let (relation_deps, view_deps) = deps.into_dependencies();
 
         Self {
-            expression: expression.clone(),
+            expression,
             mapper: Rc::new(RefCell::new(mapper)),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
         }
     }
 
-    /// Returns a reference to the underlying expression.
+    /// Returns a reference to the underlying sub-expression.
     #[inline(always)]
     pub fn expression(&self) -> &E {
         &self.expression
@@ -76,13 +76,13 @@ where
         self.mapper.borrow_mut()
     }
 
-    /// Returns a reference to relation dependencies of the receiver.
+    /// Returns a reference to the relation dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps
     }
 
-    /// Returns a reference to view dependencies of the receiver.
+    /// Returns a reference to the view dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps

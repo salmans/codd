@@ -64,39 +64,39 @@ where
         let (relation_deps, view_deps) = deps.into_dependencies();
 
         Self {
-            left: left.clone(),
-            right: right.clone(),
+            left,
+            right,
             mapper: Rc::new(RefCell::new(project)),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
         }
     }
 
-    /// Returns a reference to the expression on left.
+    /// Returns a reference to the left sub-expression.
     #[inline(always)]
-    pub(crate) fn left(&self) -> &Left {
+    pub fn left(&self) -> &Left {
         &self.left
     }
 
-    /// Returns a reference to the expression on right.
+    /// Returns a reference to the right sub-expression.
     #[inline(always)]
-    pub(crate) fn right(&self) -> &Right {
+    pub fn right(&self) -> &Right {
         &self.right
     }
 
     /// Returns a mutable reference (of type `std::cell::RefMut`) to the mapping closure.
     #[inline(always)]
-    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&L, &R) -> T> {
+    pub fn mapper_mut(&self) -> RefMut<dyn FnMut(&L, &R) -> T> {
         self.mapper.borrow_mut()
     }
 
-    /// Returns a reference to relation dependencies of the receiver.
+    /// Returns a reference to the relation dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn relation_deps(&self) -> &[String] {
         &self.relation_deps
     }
 
-    /// Returns a reference to view dependencies of the receiver.
+    /// Returns a reference to the view dependencies of the receiver.
     #[inline(always)]
     pub(crate) fn view_deps(&self) -> &[ViewRef] {
         &self.view_deps

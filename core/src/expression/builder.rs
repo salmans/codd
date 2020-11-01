@@ -2,7 +2,7 @@ use super::*;
 use crate::Tuple;
 use std::marker::PhantomData;
 
-/// Is a builder for building [`Expression`]s.
+/// Is a builder for building [`Expression`] values.
 ///
 /// [`Expression`]: ./trait.Expression.html
 pub struct Builder<L, Left>
@@ -227,7 +227,7 @@ where
     ///     
     /// assert_eq!(vec!["Apple0", "Cherry4"], db.evaluate(&join).unwrap().into_tuples());
     /// ```
-    pub fn with_key<'k, K>(self, f: impl FnMut(&L) -> K + 'static) -> WithKeyBuilder<K, L, Left>
+    pub fn with_key<K>(self, f: impl FnMut(&L) -> K + 'static) -> WithKeyBuilder<K, L, Left>
     where
         K: Tuple,
     {

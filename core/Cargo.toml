@@ -3,8 +3,13 @@ name = "codd"
 version = "0.1.0"
 authors = ["Salman Saghafi <salman.saghafi@me.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "codd is a minimal in-memory database with relational algebraic expressions as queries."
+homepage = "https://github.com/salmans/codd"
+repository = "https://github.com/salmans/codd"
+keywords = ["codd", "relational-algebra", "database"]
+categories = ["mathematics", "database-implementations"]
+readme = "../README.md"
 
 [dependencies]
 thiserror = "^1.0"

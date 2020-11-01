@@ -44,3 +44,9 @@ where
         visitor.visit_empty(&self);
     }
 }
+
+impl<T: Tuple> Default for Empty<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

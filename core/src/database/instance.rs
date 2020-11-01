@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
 };
 
-/// Is a wrapper around a vector of tuples. As an invariant, tuples of `Tuples` are sorted.
+/// Is a wrapper around a vector of tuples. As an invariant, the content of `Tuples` is sorted.
 ///
 /// **Note**: `Tuples` is borrowed from `Relation` in [`datafrog`].
 ///
@@ -196,7 +196,7 @@ where
                 let mut slice = &batch[..];
                 to_add.items.retain(|x| {
                     slice = gallop(slice, |y| y < x);
-                    slice.len() == 0 || &slice[0] != x
+                    slice.is_empty() || &slice[0] != x
                 });
             }
             *self.recent.borrow_mut() = to_add;
