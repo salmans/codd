@@ -1,6 +1,6 @@
 # codd
 
-`codd` (named after [Edgar F. Codd](https://en.wikipedia.org/wiki/Edgar_F._Codd)) is a library for evaluating *typed* relational expressions in a monotonically growing minimal database in memory. `codd` is primarily developed to support an implementation of [`razor`](https://github.com/salmans/rusty-razor) based on relational algebra, however, its design is consistent with common concepts of database theory and may be used as a minimal general purpose database.
+[`codd`](https://en.wikipedia.org/wiki/Edgar_F._Codd) is a library for evaluating *typed* relational expressions in a monotonically growing minimal database in memory. `codd` is primarily developed to support an implementation of [`razor`](https://github.com/salmans/rusty-razor) based on relational algebra, however, its design is consistent with common concepts of database theory and may be used as a minimal general purpose database.
 
 The implementation of database instances in `codd` is borrowed from [`datafrog`](https://github.com/rust-lang/datafrog):
 * `Instance<T>` (`Variable<T>` in `datafrog`) contains tuples of type `T`,
