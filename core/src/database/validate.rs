@@ -3,11 +3,8 @@ use crate::{
     Error, Tuple,
 };
 
-/// Is a `crate::expression::Visitor` that validates if an expression can be turned into
-/// a [`View`]. Currently, expressions containing `Difference` are not supported.
-///
-/// [`View`]: ../../struct.View.html
-/// [`Difference`]: ../../struct.Difference.html
+/// Is a [`Visitor`] that validates if an expression can be turned into a [`View`].
+/// Currently, expressions containing `Difference` are not supported.
 pub(crate) struct ViewExpressionValidator(Option<Error>);
 
 impl ViewExpressionValidator {

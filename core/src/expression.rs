@@ -1,4 +1,4 @@
-/*! Defines relational algebraic expressions as generic types over `Tuple` types.*/
+/*! Defines relational algebraic expressions as generic types over [`Tuple`] types.*/
 mod builder;
 pub(crate) mod dependency;
 mod difference;
@@ -34,8 +34,6 @@ pub use view::View;
 /// Is the trait of expressions in relational algebra that can be evaluated in a database.
 pub trait Expression<T: Tuple>: Clone + std::fmt::Debug {
     /// Visits this expression by a [`Visitor`].
-    ///
-    /// [`Visitor`]: ./trait.Visitor.html
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor;
@@ -73,8 +71,6 @@ where
 }
 
 /// Is the trait of types that can be turned into an [`Expression`].
-///
-/// [`Expression`]: ./trait.Expression.html
 pub trait IntoExpression<T, E>
 where
     T: Tuple,
@@ -97,10 +93,8 @@ where
 /// Is the trait of objects that visit sub-expressions of an [`Expression`]. The default
 /// implementation guides the visitor through all sub-expressions of the expressions that
 /// is visited.
-///
-/// [`Expression`]: ./trait.Expression.html
 pub trait Visitor: Sized {
-    /// Visits the `Full` expression.
+    /// Visits the [`Full`] expression.
     fn visit_full<T>(&mut self, full: &Full<T>)
     where
         T: Tuple,
@@ -108,7 +102,7 @@ pub trait Visitor: Sized {
         walk_full(self, full)
     }
 
-    /// Visits the `Empty` expression.
+    /// Visits the [`Empty`] expression.
     fn visit_empty<T>(&mut self, empty: &Empty<T>)
     where
         T: Tuple,
@@ -116,7 +110,7 @@ pub trait Visitor: Sized {
         walk_empty(self, empty)
     }
 
-    /// Visits a `Singlenton` expression.
+    /// Visits a [`Singleton`] expression.
     fn visit_singleton<T>(&mut self, singleton: &Singleton<T>)
     where
         T: Tuple,
@@ -124,7 +118,7 @@ pub trait Visitor: Sized {
         walk_singlenton(self, singleton)
     }
 
-    /// Visits a `Relation` expression.
+    /// Visits a [`Relation`] expression.
     fn visit_relation<T>(&mut self, relation: &Relation<T>)
     where
         T: Tuple,
@@ -132,7 +126,7 @@ pub trait Visitor: Sized {
         walk_relation(self, relation)
     }
 
-    /// Visits a `Select` expression.
+    /// Visits a [`Select`] expression.
     fn visit_select<T, E>(&mut self, select: &Select<T, E>)
     where
         T: Tuple,
@@ -141,7 +135,7 @@ pub trait Visitor: Sized {
         walk_select(self, select);
     }
 
-    /// Visits a `Union` expression.    
+    /// Visits a [`Union`] expression.    
     fn visit_union<T, L, R>(&mut self, union: &Union<T, L, R>)
     where
         T: Tuple,
@@ -151,7 +145,7 @@ pub trait Visitor: Sized {
         walk_union(self, union);
     }
 
-    /// Visits an `Intersect` expression.    
+    /// Visits an [`Intersect`] expression.    
     fn visit_intersect<T, L, R>(&mut self, intersect: &Intersect<T, L, R>)
     where
         T: Tuple,
@@ -161,7 +155,7 @@ pub trait Visitor: Sized {
         walk_intersect(self, intersect);
     }
 
-    /// Visits a `Difference` expression.    
+    /// Visits a [`Difference`] expression.    
     fn visit_difference<T, L, R>(&mut self, difference: &Difference<T, L, R>)
     where
         T: Tuple,
@@ -171,7 +165,7 @@ pub trait Visitor: Sized {
         walk_difference(self, difference);
     }
 
-    /// Visits a `Project` expression.    
+    /// Visits a [`Project`] expression.    
     fn visit_project<S, T, E>(&mut self, project: &Project<S, T, E>)
     where
         T: Tuple,
@@ -181,7 +175,7 @@ pub trait Visitor: Sized {
         walk_project(self, project);
     }
 
-    /// Visits a `Product` expression.    
+    /// Visits a [`Product`] expression.    
     fn visit_product<L, R, Left, Right, T>(&mut self, product: &Product<L, R, Left, Right, T>)
     where
         L: Tuple,
@@ -193,7 +187,7 @@ pub trait Visitor: Sized {
         walk_product(self, product);
     }
 
-    /// Visits a `Join` expression.    
+    /// Visits a [`Join`] expression.    
     fn visit_join<K, L, R, Left, Right, T>(&mut self, join: &Join<K, L, R, Left, Right, T>)
     where
         K: Tuple,
@@ -206,7 +200,7 @@ pub trait Visitor: Sized {
         walk_join(self, join);
     }
 
-    /// Visits a `View` expression.    
+    /// Visits a [`View`] expression.    
     fn visit_view<T, E>(&mut self, view: &View<T, E>)
     where
         T: Tuple,

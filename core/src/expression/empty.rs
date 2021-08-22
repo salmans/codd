@@ -25,7 +25,7 @@ impl<T> Empty<T>
 where
     T: Tuple,
 {
-    /// Creates a new instance of `Empty`.
+    /// Creates a new instance of [`Empty`].
     pub fn new() -> Self {
         Self {
             _phantom: PhantomData,

@@ -4,7 +4,7 @@ use crate::{
 };
 use std::collections::HashSet;
 
-/// Implements the `crate::expression::Visitor` to collect the relations and views to which
+/// Implements the [`Visitor`] to collect the relations and views to which
 /// the visited expression depends.
 pub(crate) struct DependencyVisitor {
     relations: HashSet<String>,
@@ -12,7 +12,7 @@ pub(crate) struct DependencyVisitor {
 }
 
 impl DependencyVisitor {
-    /// Creates a new `Dependencies` visitor.
+    /// Creates a new [`DependencyVisitor`].
     pub fn new() -> Self {
         Self {
             relations: HashSet::new(),
