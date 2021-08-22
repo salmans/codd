@@ -309,7 +309,6 @@ impl Database {
             while entry.instance.instance().changed() {
                 for r in entry.dependent_views.iter() {
                     self.views.get(r).unwrap().instance.stabilize(&self)?;
-                    self.stabilize_view(r)?;
                 }
             }
 
@@ -333,7 +332,6 @@ impl Database {
             while entry.instance.changed() {
                 for r in entry.dependent_views.iter() {
                     self.views.get(r).unwrap().instance.stabilize(&self)?;
-                    self.stabilize_view(r)?;
                 }
             }
 
