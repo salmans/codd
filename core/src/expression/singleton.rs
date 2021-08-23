@@ -18,7 +18,7 @@ where
     T: Tuple;
 
 impl<T: Tuple> Singleton<T> {
-    /// Create a new instance of `Singleton` with `tuple` as the inner value.
+    /// Create a new instance of [`Singleton`] with `tuple` as the inner value.
     pub fn new(tuple: T) -> Self {
         Self(tuple)
     }

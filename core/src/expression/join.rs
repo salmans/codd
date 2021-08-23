@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-/// Is the type of `Join` mapping closures for constructing tuples of type `T` from a key
+/// Is the type of [`Join`] mapping closures for constructing tuples of type `T` from a key
 /// of type `K`, a left tuple of type `L`, and a right tuple of type `R`.
 type Mapper<K, L, R, T> = dyn FnMut(&K, &L, &R) -> T;
 
@@ -66,7 +66,7 @@ where
     Left: Expression<L>,
     Right: Expression<R>,
 {
-    /// Creates a new `Join` expression over `left` and `right` where `left_key`
+    /// Creates a new [`Join`] expression over `left` and `right` where `left_key`
     /// and `right_key` are closures that return the join key for tuples of
     /// `left` and `right` respectively. The closure `mapper` computes the tuples
     /// of the resulting expression from the join key and the tuples of `left` and
@@ -114,21 +114,21 @@ where
         &self.right
     }
 
-    /// Returns a mutable reference (of type `RefMut`) of the key closure for
+    /// Returns a mutable reference (of type [`RefMut`]) of the key closure for
     /// the left sub-expression.
     #[inline(always)]
     pub(crate) fn left_key_mut(&self) -> RefMut<dyn FnMut(&L) -> K> {
         self.left_key.borrow_mut()
     }
 
-    /// Returns a mutable reference (of type `RefMut`) of the key closure for
+    /// Returns a mutable reference (of type [`RefMut`]) of the key closure for
     /// the right sub-expression.
     #[inline(always)]
     pub(crate) fn right_key_mut(&self) -> RefMut<dyn FnMut(&R) -> K> {
         self.right_key.borrow_mut()
     }
 
-    /// Returns a mutable reference (of type `std::cell::RefMut`) to the joining closure.
+    /// Returns a mutable reference (of type [`RefMut`]) to the joining closure.
     #[inline(always)]
     pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&K, &L, &R) -> T> {
         self.mapper.borrow_mut()

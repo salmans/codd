@@ -39,7 +39,7 @@ where
     L: Expression<T>,
     R: Expression<T>,
 {
-    /// Creates a new instance of `Union` corresponding to `left ∪ right`.
+    /// Creates a new instance of [`Union`] corresponding to `left ∪ right`.
     pub fn new<IL, IR>(left: IL, right: IR) -> Self
     where
         IL: IntoExpression<T, L>,

@@ -30,7 +30,7 @@ impl<T> Relation<T>
 where
     T: Tuple,
 {
-    /// Creates a new `Relation` with a given `name`.
+    /// Creates a new [`Relation`] with a given `name`.
     pub fn new<S>(name: S) -> Self
     where
         S: Into<String>,

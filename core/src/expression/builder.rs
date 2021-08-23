@@ -3,8 +3,6 @@ use crate::Tuple;
 use std::marker::PhantomData;
 
 /// Is a builder for building [`Expression`] values.
-///
-/// [`Expression`]: ./trait.Expression.html
 pub struct Builder<L, Left>
 where
     L: Tuple,
@@ -21,8 +19,6 @@ where
     Left: Expression<L>,
 {
     /// Builds a [`Project`] expression over the receiver's expression.
-    ///
-    /// [`Project`]: ./struct.Project.html
     ///
     /// **Example**:
     /// ```rust
@@ -49,8 +45,6 @@ where
 
     /// Builds a [`Select`] expression over the receiver's expression.
     ///
-    /// [`Select`]: ./struct.Select.html
-    ///    
     /// **Example**:
     /// ```rust
     /// use codd::{Database, Expression};
@@ -72,8 +66,6 @@ where
     }
 
     /// Builds an [`Intersect`] expression with the receiver's expression on left and `other` on right.
-    ///
-    /// [`Intersect`]: ./struct.Intersect.html
     ///
     /// **Example**:
     /// ```rust
@@ -102,8 +94,6 @@ where
     }
 
     /// Builds a [`Difference`] expression with the receiver's expression on left and `other` on right.
-    ///
-    /// [`Difference`]: ./struct.Difference.html
     ///
     /// **Example**:
     /// ```rust
@@ -135,8 +125,6 @@ where
 
     /// Builds a [`Union`] expression with the receiver's expression on left and `other` on right.
     ///
-    /// [`Union`]: ./struct.Union.html
-    ///
     /// **Example**:
     /// ```rust
     /// use codd::{Database, Expression};
@@ -165,8 +153,6 @@ where
 
     /// Combines the receiver's expression with `other` in a temporary builder, which then can be turned into
     /// a [`Product`] expression using a combining closure provided by method `on`.
-    ///
-    /// [`Product`]: ./struct.Product.html
     ///
     /// **Example**:
     /// ```rust
@@ -199,8 +185,6 @@ where
     /// Combines the receiver's expression with closure `f` as the join key. This value can then be joined with
     /// another expression and it's key to create a temporary join builder. Finally, the temporary builder
     /// can be turned into a [`Join`] expression using a combining closure provided by method `on`.
-    ///
-    /// [`Join`]: ./struct.Join.html
     ///
     /// **Example**:
     /// ```rust

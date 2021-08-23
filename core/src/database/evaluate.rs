@@ -6,9 +6,8 @@ use super::{
 };
 use crate::{expression::*, Error, Tuple};
 
-/// Implements `crate::expression::RecentCollector` and `crate::expression::StableCollector`
-/// to incrementally collect recent and stable tuples of `Instance`s of a database for
-/// expressions.
+/// Implements [`RecentCollector`] and [`StableCollector`] to incrementally
+/// collect recent and stable tuples of instances of a database for expressions.
 #[derive(Clone)]
 pub(super) struct IncrementalCollector<'d> {
     /// Is the database in which the visited expression is evaluated.
@@ -495,7 +494,7 @@ pub(super) struct Evaluator<'d> {
 }
 
 impl<'d> Evaluator<'d> {
-    /// Creates a new `Evaluator`.
+    /// Creates a new [`Evaluator`].
     pub fn new(database: &'d Database) -> Self {
         Self { database }
     }

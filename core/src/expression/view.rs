@@ -60,7 +60,7 @@ where
     T: Tuple,
     E: Expression<T>,
 {
-    /// Creates a new view with a given reference.
+    /// Creates a new [`View`] with a given reference.
     pub(crate) fn new(reference: ViewRef) -> Self {
         Self {
             view_deps: vec![reference.clone()],

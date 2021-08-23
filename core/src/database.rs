@@ -2,8 +2,6 @@
 * Relation and view instances are generic over [`Tuple`] types.
 * Supports incremental view update by keeping track of recently added tuples.
 * Relation instances monotonically grow (supports insertion but not deletion).
-
-[`Database`]: ../trait.Tuple.html
 */
 mod evaluate;
 mod expression_ext;
@@ -26,7 +24,7 @@ use instance::{DynInstance, Instance};
 
 /// Contains the information about an instance in the database.
 struct RelationEntry {
-    /// Is the `Instance` containing the tuples of this relation.
+    /// Is the [`Instance`] containing the tuples of this relation.
     instance: Box<dyn DynInstance>,
 
     /// Contains references to the views that this relation appears in their
@@ -38,7 +36,7 @@ struct RelationEntry {
 }
 
 impl RelationEntry {
-    /// Creates a new `RelationEntry` with the given `instance`.
+    /// Creates a new [`RelationEntry`] with the given `instance`.
     fn new<T>() -> Self
     where
         T: Tuple + 'static,
@@ -70,7 +68,7 @@ use instance::{DynViewInstance, ViewInstance};
 
 /// Contains the information about a view in the database.
 struct ViewEntry {
-    /// Is the underlying `Instance` storing the tuples of the view.
+    /// Is the underlying [`Instance`] storing the tuples of the view.
     instance: Box<dyn DynViewInstance>,
 
     /// Contains references (relation names) to the relations that
@@ -93,7 +91,7 @@ struct ViewEntry {
 }
 
 impl ViewEntry {
-    /// Creates a new `ViewEntry` with the given `view_instance`.
+    /// Creates a new [`ViewEntry`] with the given [`ViewInstance`].
     fn new<T, E>(view_instance: ViewInstance<T, E>) -> Self
     where
         T: Tuple + 'static,
@@ -177,7 +175,7 @@ impl Database {
         }
     }
 
-    /// Evaluates `expression` in the database and returns the result in a `Tuples` object.
+    /// Evaluates `expression` in the database and returns the result in a [`Tuples`] object.
     pub fn evaluate<T, E>(&self, expression: &E) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
@@ -188,8 +186,6 @@ impl Database {
 
     /// Adds a new relation instance identified by `name` to the database and returns a
     /// [`Relation`] object that can be used to access the instance.
-    ///
-    /// [`Relation`]: ./expression/struct.Relation.html    
     pub fn add_relation<T>(&mut self, name: &str) -> Result<Relation<T>, Error>
     where
         T: Tuple + 'static,
@@ -203,7 +199,7 @@ impl Database {
         }
     }
 
-    /// Inserts tuples in the `Instance` corresponding to `relation`.
+    /// Inserts tuples in the instance corresponding to `relation`.
     pub fn insert<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
     where
         T: Tuple + 'static,
@@ -230,8 +226,6 @@ impl Database {
 
     /// Stores a new view over `expression` and returns a [`View`] objeect that can be
     /// evaluated as a view.
-    ///
-    /// [`View`]: ./expression/struct.View.html
     pub fn store_view<T, E, I>(&mut self, expression: I) -> Result<View<T, E>, Error>
     where
         T: Tuple + 'static,

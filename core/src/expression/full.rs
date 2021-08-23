@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 /// Is a placeholder for a "full" instance, containing *all* tuples of its type.
 ///
-/// **Note**: because `Full` expression cannot be described by a range-restricted
+/// **Note**: because [`Full`] expression cannot be described by a range-restricted
 /// (see [chapter 2] of Foundations of Databases) query, any query containing
 /// `Full` as a subexpression cannot be evaluated in a database safely.
 ///
@@ -31,7 +31,7 @@ impl<T> Full<T>
 where
     T: Tuple,
 {
-    /// Creates a new instance of `Full`.
+    /// Creates a new instance of [`Full`].
     pub fn new() -> Self {
         Self {
             _phantom: PhantomData,

@@ -47,7 +47,7 @@ where
     Left: Expression<L>,
     Right: Expression<R>,
 {
-    /// Creates a `Product` expression over `left` and `right` with `mapper` as the closure
+    /// Creates a [`Product`] expression over `left` and `right` with `mapper` as the closure
     /// that produces the tuples of the resulting expression from tuples of `left` and `right`.
     pub fn new<IL, IR>(left: IL, right: IR, project: impl FnMut(&L, &R) -> T + 'static) -> Self
     where
@@ -84,7 +84,7 @@ where
         &self.right
     }
 
-    /// Returns a mutable reference (of type `std::cell::RefMut`) to the mapping closure.
+    /// Returns a mutable reference (of type [`RefMut`]) to the mapping closure.
     #[inline(always)]
     pub fn mapper_mut(&self) -> RefMut<dyn FnMut(&L, &R) -> T> {
         self.mapper.borrow_mut()

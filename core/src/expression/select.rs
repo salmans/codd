@@ -41,7 +41,7 @@ where
     T: Tuple,
     E: Expression<T>,
 {
-    /// Creates a new `Select` expression over `expression` according to the `predicate` closure.
+    /// Creates a new [`Select`] expression over `expression` according to the `predicate` closure.
     pub fn new<I, P>(expression: I, predicate: P) -> Self
     where
         I: IntoExpression<T, E>,
@@ -68,7 +68,7 @@ where
         &self.expression
     }
 
-    /// Returns a mutable reference (of type `std::cell::RefMut`) to the select predicate.
+    /// Returns a mutable reference (of type [`RefMut`]) to the select predicate.
     #[inline(always)]
     pub(crate) fn predicate_mut(&self) -> RefMut<dyn FnMut(&T) -> bool> {
         self.predicate.borrow_mut()

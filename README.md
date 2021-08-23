@@ -12,7 +12,7 @@ The relational algebra and database terminology in `codd` is adopted from [Alice
 
 ## Build
 
-`codd` is written in [Rust](https://www.rust-lang.org). You can use Rust 1.46.0 or newer to build the library:
+`codd` is written in [Rust](https://www.rust-lang.org). You can use Rust 1.54.0 or newer to build the library:
 
 ```
 git clone https://github.com/salmans/codd.git

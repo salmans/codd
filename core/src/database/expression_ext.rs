@@ -3,9 +3,7 @@ use crate::{
     Error, Tuple, Tuples,
 };
 
-/// Extends `Expression` with methods required for incremental database update.
-///
-/// [`Expression`]: ../../trait.Expression.html
+/// Extends [`Expression`] with methods required for incremental database update.
 pub trait ExpressionExt<T: Tuple>: Expression<T> {
     /// Visits this node by a [`RecentCollector`] and returns the recent tuples of the
     /// database according to the logic implemented by `collector`.
@@ -13,8 +11,6 @@ pub trait ExpressionExt<T: Tuple>: Expression<T> {
     /// **Note**:
     /// Recent tuples are those tuples that got inserted into relation instances of a
     /// database before any dependent (materialized) views are updated.
-    ///
-    /// [`RecentCollector`]: ./trait.RecentCollector.html
     fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
     where
         C: RecentCollector;
@@ -25,8 +21,6 @@ pub trait ExpressionExt<T: Tuple>: Expression<T> {
     /// **Note**:
     /// Stable tuples are those tuples that have already been reflected in (materialized)
     /// views that are affected by those tuples.
-    ///
-    /// [`StableCollector`]: ./trait.StableCollector.html    
     fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
     where
         C: StableCollector;
@@ -99,40 +93,40 @@ where
 /// Is the trait of objects that implement the logic for collecting the recent tuples of
 /// a database when the visited expression is evaluated.
 pub trait RecentCollector {
-    /// Collects the recent tuples for the `Full` expression.
+    /// Collects the recent tuples for the [`Full`] expression.
     fn collect_full<T>(&self, full: &Full<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    /// Collects the recent tuples for the `Empty` expression.
+    /// Collects the recent tuples for the [`Empty`] expression.
     fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    /// Collects the recent tuples for a `Singleton` expression.
+    /// Collects the recent tuples for a [`Singleton`] expression.
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple;
 
-    /// Collects the recent tuples for a `Relation` expression.
+    /// Collects the recent tuples for a [`Relation`] expression.
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
     where
         T: Tuple + 'static;
 
-    /// Collects the recent tuples for a `Select` expression.
+    /// Collects the recent tuples for a [`Select`] expression.
     fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         E: ExpressionExt<T>;
 
-    /// Collects the recent tuples for a `Union` expression.    
+    /// Collects the recent tuples for a [`Union`] expression.    
     fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
-    /// Collects the recent tuples for an `Intersect` expression.    
+    /// Collects the recent tuples for an [`Intersect`] expression.    
     fn collect_intersect<T, L, R>(
         &self,
         intersect: &Intersect<T, L, R>,
@@ -142,7 +136,7 @@ pub trait RecentCollector {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
-    /// Collects the recent tuples for a `Difference` expression.    
+    /// Collects the recent tuples for a [`Difference`] expression.    
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
@@ -152,14 +146,14 @@ pub trait RecentCollector {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
-    /// Collects the recent tuples for a `Project` expression.    
+    /// Collects the recent tuples for a [`Project`] expression.    
     fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple,
         S: Tuple,
         E: ExpressionExt<S>;
 
-    /// Collects the recent tuples for a `Product` expression.    
+    /// Collects the recent tuples for a [`Product`] expression.    
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
@@ -171,7 +165,7 @@ pub trait RecentCollector {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>;
 
-    /// Collects the recent tuples for a `Join` expression.    
+    /// Collects the recent tuples for a [`Join`] expression.    
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
@@ -184,7 +178,7 @@ pub trait RecentCollector {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>;
 
-    /// Collects the recent tuples for a `View` expression.
+    /// Collects the recent tuples for a [`View`] expression.
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
     where
         T: Tuple + 'static,
@@ -194,40 +188,40 @@ pub trait RecentCollector {
 /// Is the trait of objects that implement the logic for collecting the stable tuples of
 /// a database when the visited expression is evaluated.
 pub trait StableCollector {
-    /// Collects the stable tuples for the `Full` expression.    
+    /// Collects the stable tuples for the [`Full`] expression.    
     fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple;
 
-    /// Collects the stable tuples for the `Empty` expression.        
+    /// Collects the stable tuples for the [`Empty`] expression.        
     fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple;
 
-    /// Collects the stable tuples for a `Singleton` expression.        
+    /// Collects the stable tuples for a [`Singleton`] expression.        
     fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple;
 
-    /// Collects the stable tuples for a `Relation` expression.            
+    /// Collects the stable tuples for a [`Relation`] expression.            
     fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple + 'static;
 
-    /// Collects the stable tuples for a `Select` expression.            
+    /// Collects the stable tuples for a [`Select`] expression.            
     fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         E: ExpressionExt<T>;
 
-    /// Collects the stable tuples for a `Union` expression.            
+    /// Collects the stable tuples for a [`Union`] expression.            
     fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
-    /// Collects the stable tuples for an `Intersect` expression.            
+    /// Collects the stable tuples for an [`Intersect`] expression.            
     fn collect_intersect<T, L, R>(
         &self,
         intersect: &Intersect<T, L, R>,
@@ -237,7 +231,7 @@ pub trait StableCollector {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
-    /// Collects the stable tuples for a `Difference` expression.            
+    /// Collects the stable tuples for a [`Difference`] expression.            
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
@@ -247,14 +241,14 @@ pub trait StableCollector {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
-    /// Collects the stable tuples for a `Project` expression.            
+    /// Collects the stable tuples for a [`Project`] expression.            
     fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple,
         S: Tuple,
         E: ExpressionExt<S>;
 
-    /// Collects the stable tuples for a `Product` expression.            
+    /// Collects the stable tuples for a [`Product`] expression.            
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
@@ -266,7 +260,7 @@ pub trait StableCollector {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>;
 
-    /// Collects the stable tuples for a `Join` expression.            
+    /// Collects the stable tuples for a [`Join`] expression.            
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
@@ -279,7 +273,7 @@ pub trait StableCollector {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>;
 
-    /// Collects the stable tuples for a `View` expression.            
+    /// Collects the stable tuples for a [`View`] expression.            
     fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
     where
         T: Tuple + 'static,

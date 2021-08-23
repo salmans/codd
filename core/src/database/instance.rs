@@ -7,9 +7,9 @@ use std::{
     rc::Rc,
 };
 
-/// Is a wrapper around a vector of tuples. As an invariant, the content of `Tuples` is sorted.
+/// Is a wrapper around a vector of tuples. As an invariant, the content of [`Tuples`] is sorted.
 ///
-/// **Note**: `Tuples` is borrowed from `Relation` in [`datafrog`].
+/// **Note**: [`Tuples`] is borrowed from `Relation` in [`datafrog`].
 ///
 /// [`datafrog`]: https://github.com/rust-lang/datafrog
 #[derive(Clone, Debug, PartialEq)]
@@ -28,7 +28,7 @@ impl<T: Tuple, I: IntoIterator<Item = T>> From<I> for Tuples<T> {
 }
 
 impl<T: Tuple> Tuples<T> {
-    /// Merges the instances of the reciver with `other` and returns a new `Tuples`
+    /// Merges the instances of the reciver with `other` and returns a new [`Tuples`]
     /// instance.
     pub(crate) fn merge(self, other: Self) -> Self {
         let mut tuples = Vec::with_capacity(self.items.len() + other.items.len());
@@ -63,16 +63,16 @@ impl<T: Tuple> core::ops::DerefMut for Tuples<T> {
     }
 }
 
-/// Is used to store database `Instance`s in a map by hiding their (generic) type.
+/// Is used to store instances of a database in a map by hiding their (generic) type.
 pub(super) trait DynInstance {
-    /// Returns the instance as `Any`
+    /// Returns the instance as [`Any`]
     fn as_any(&self) -> &dyn Any;
 
     /// Returns true if the instance has been affected by last updates. It also moves all
     /// `to_add` tuples to `recent` and `recent` tuples to `stable`.
     fn changed(&self) -> bool;
 
-    /// Clones the instance in a `Box`.
+    /// Clones the instance in a [`Box`].
     fn clone_box(&self) -> Box<dyn DynInstance>;
 }
 
@@ -90,13 +90,13 @@ pub(super) trait DynViewInstance {
     /// Stabilizes the view from the `recent` tuples in the instances of `db`.
     fn stabilize(&self, db: &Database) -> Result<(), Error>;
 
-    /// Clones the instance in a `Box`.
+    /// Clones the instance in a [`Box`].
     fn clone_box(&self) -> Box<dyn DynViewInstance>;
 }
 
 /// Contains the tuples of a relation in the database.
 ///
-/// **Note**: `Instance` is a replica of `Variable` in [`datafrog`].
+/// **Note**: `Instance` mirrors `Variable` in [`datafrog`].
 ///
 /// [`datafrog`]: https://github.com/rust-lang/datafrog
 #[derive(Debug, PartialEq)]
@@ -122,7 +122,7 @@ impl<T: Tuple> Instance<T> {
         }
     }
 
-    /// Adds a `Tuples` instance to `to_add` tuples. These tuples will be ultimately
+    /// Adds a [`Tuples`] data to `to_add` tuples. These tuples will be ultimately
     /// added to the instance if they already don't exist.
     pub fn insert(&self, tuples: Tuples<T>) {
         if !tuples.is_empty() {
@@ -130,21 +130,21 @@ impl<T: Tuple> Instance<T> {
         }
     }
 
-    /// Returns an immutable reference (of type `std::cell::Ref`) to the stable tuples
+    /// Returns an immutable reference (of type [`Ref`]) to the stable tuples
     /// of this instance.
     #[inline(always)]
     pub fn stable(&self) -> Ref<Vec<Tuples<T>>> {
         self.stable.borrow()
     }
 
-    /// Returns an immutable reference (of type `std::cell::Ref`) to the recent tuples
+    /// Returns an immutable reference (of type [`Ref`]) to the recent tuples
     /// of this instance.
     #[inline(always)]
     pub fn recent(&self) -> Ref<Tuples<T>> {
         self.recent.borrow()
     }
 
-    /// Returns an immutable reference (of type `std::cell::Ref`) to the candidates to
+    /// Returns an immutable reference (of type [`Ref`]) to the candidates to
     /// be added to the recent tuples of this instance (if they already don't exist).
     #[inline(always)]
     pub fn to_add(&self) -> Ref<Vec<Tuples<T>>> {

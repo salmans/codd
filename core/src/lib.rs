@@ -1,7 +1,4 @@
-/*! Implements a minimal [database] and relational algebraic [expressions] for evaluating queries in the database.
-
-[database]: ./struct.Database.html
-[expressions]: ./expression/index.html
+/*! Implements a minimal [database][Database] and relational algebraic [expressions][expression] for evaluating queries in the database.
  */
 mod database;
 pub mod expression;

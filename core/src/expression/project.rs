@@ -43,7 +43,7 @@ where
     T: Tuple,
     E: Expression<S>,
 {
-    /// Creates a new `Project` expression over `expression` with a closure `mapper` that
+    /// Creates a new [`Project`] expression over `expression` with a closure `mapper` that
     /// projects tuples of `expression` to the resulting tuples.
     pub fn new<I>(expression: I, mapper: impl FnMut(&S) -> T + 'static) -> Self
     where
@@ -70,7 +70,7 @@ where
         &self.expression
     }
 
-    /// Returns a mutable reference (of type `std::cell::RefMut`) to the projecting closure.
+    /// Returns a mutable reference (of type [`RefMut`]) to the projecting closure.
     #[inline(always)]
     pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&S) -> T> {
         self.mapper.borrow_mut()

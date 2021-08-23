@@ -1,16 +1,10 @@
 /*! Implements [`Mono`], a recursive expression where all subexpressions act on the
 same [`Tuple`] type.
-
-[`Tuple`]: ../../trait.Tuple.html
-[`Mono`]: ./struct.Mono.html
 */
 
 use super::*;
 
-/// Is a recursive [expression] where all subexpressions act on the same [`Tuple`] type.;
-///
-/// [`Tuple`]: ../trait.Tuple.html
-/// [expression]: ./trait.Expression.html
+/// Is a recursive [`Expression`] where all subexpressions act on the same [`Tuple`] type.;
 #[derive(Clone, Debug)]
 #[allow(clippy::type_complexity)]
 pub enum Mono<T>
