@@ -111,7 +111,6 @@ macro_rules! relexp {
 
 #[cfg(test)]
 mod tests {
-    use crate::{query, relexp};
     use crate::{Database, Tuples};
 
     macro_rules! create_relation {
