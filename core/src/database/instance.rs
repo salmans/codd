@@ -386,7 +386,7 @@ mod tests {
             assert_eq!(Vec::<Tuples<i32>>::new(), *relation.stable.borrow());
             assert_eq!(vec![1, 2, 3], relation.recent.borrow().items);
             assert_eq!(
-                Vec::<Tuples<i32>>::from(vec![vec![4, 5].into()]),
+                vec![Tuples::<i32>::from(vec![4, 5])],
                 *relation.to_add.borrow(),
             );
         }
@@ -426,7 +426,7 @@ mod tests {
             };
             assert!(!relation.changed());
             assert_eq!(
-                Vec::<Tuples<i32>>::from(vec![vec![1, 2].into()]),
+                vec![Tuples::<i32>::from(vec![1, 2])],
                 *relation.stable.borrow()
             );
             assert_eq!(Vec::<i32>::new(), relation.recent.borrow().items);
@@ -441,7 +441,7 @@ mod tests {
             };
             assert!(relation.changed());
             assert_eq!(
-                Vec::<Tuples<i32>>::from(vec![vec![1, 2].into()]),
+                vec![Tuples::<i32>::from(vec![1, 2])],
                 *relation.stable.borrow()
             );
             assert_eq!(vec![3, 4], relation.recent.borrow().items);
@@ -456,7 +456,7 @@ mod tests {
             };
             assert!(relation.changed());
             assert_eq!(
-                Vec::<Tuples<i32>>::from(vec![vec![1, 2, 3, 4].into()]),
+                vec![Tuples::<i32>::from(vec![1, 2, 3, 4])],
                 *relation.stable.borrow()
             );
             assert_eq!(vec![5], relation.recent.borrow().items);
@@ -471,7 +471,7 @@ mod tests {
             };
             assert!(relation.changed());
             assert_eq!(
-                Vec::<Tuples<i32>>::from(vec![vec![1, 2, 3, 4].into()]),
+                vec![Tuples::<i32>::from(vec![1, 2, 3, 4])],
                 *relation.stable.borrow()
             );
             assert_eq!(vec![5], relation.recent.borrow().items);
