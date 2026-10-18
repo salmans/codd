@@ -1,7 +1,7 @@
 /*! Implements a minimal database with the following features:
 * Relation and view instances are generic over [`Tuple`] types.
-* Supports incremental view update by keeping track of recently added tuples.
-* Relation instances monotonically grow (supports insertion but not deletion).
+* Views are maintained incrementally from weighted changes (insertions and retractions).
+* Clones share immutable storage and diverge independently.
 */
 mod evaluate;
 mod expression_ext;
