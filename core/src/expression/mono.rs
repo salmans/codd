@@ -20,6 +20,7 @@ where
     Union(Box<Union<T, Mono<T>, Mono<T>>>),
     Intersect(Box<Intersect<T, Mono<T>, Mono<T>>>),
     Difference(Box<Difference<T, Mono<T>, Mono<T>>>),
+    Distinct(Box<Distinct<T, Mono<T>>>),
     Product(Box<Product<T, T, Mono<T>, Mono<T>, T>>),
     Join(Box<Join<T, T, T, Mono<T>, Mono<T>, T>>),
     View(Box<View<T, Mono<T>>>),
@@ -98,6 +99,12 @@ impl<T: Tuple> From<Join<T, T, T, Mono<T>, Mono<T>, T>> for Mono<T> {
     }
 }
 
+impl<T: Tuple> From<Distinct<T, Mono<T>>> for Mono<T> {
+    fn from(distinct: Distinct<T, Mono<T>>) -> Self {
+        Self::Distinct(Box::new(distinct))
+    }
+}
+
 impl<T: Tuple> From<View<T, Mono<T>>> for Mono<T> {
     fn from(view: View<T, Mono<T>>) -> Self {
         Self::View(Box::new(view))
@@ -119,6 +126,7 @@ impl<T: Tuple + 'static> Expression<T> for Mono<T> {
             Mono::Union(exp) => exp.visit(visitor),
             Mono::Intersect(exp) => exp.visit(visitor),
             Mono::Difference(exp) => exp.visit(visitor),
+            Mono::Distinct(exp) => exp.visit(visitor),
             Mono::Product(exp) => exp.visit(visitor),
             Mono::Join(exp) => exp.visit(visitor),
             Mono::View(exp) => exp.visit(visitor),

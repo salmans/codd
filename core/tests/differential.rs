@@ -1,7 +1,7 @@
 //! Differential testing of codd against a naive set-based reference model.
 //!
 //! A random byte string is decoded into a program over a small schema: inserts,
-//! stored views, ad hoc evaluations and database clones ("forks"). Every
+//! retractions, stored views, ad hoc evaluations and database clones ("forks"). Every
 //! operation is applied both to a `codd::Database` and to a shadow model made
 //! of `BTreeSet`s. Every evaluation must agree between the two.
 //!
@@ -11,8 +11,8 @@
 
 use codd::{
     expression::{
-        Difference, Empty, Intersect, Join, Mono, Product, Project, Relation, Select, Singleton,
-        Union, View,
+        Difference, Distinct, Empty, Intersect, Join, Mono, Product, Project, Relation, Select,
+        Singleton, Union, View,
     },
     Database,
 };
@@ -35,6 +35,7 @@ enum Q {
         col: usize,
         val: u32,
     },
+    Distinct(Box<Q>),
     Project {
         e: Box<Q>,
         cols: Vec<usize>,
@@ -65,7 +66,7 @@ fn arity(q: &Q, s: &Shadow) -> usize {
         Q::View(i) => s.views[*i].2,
         Q::Empty(a) => *a,
         Q::Singleton(r) => r.len(),
-        Q::Select { e, .. } => arity(e, s),
+        Q::Select { e, .. } | Q::Distinct(e) => arity(e, s),
         Q::Project { cols, .. } => cols.len(),
         Q::Union(l, _) | Q::Intersect(l, _) | Q::Difference(l, _) => arity(l, s),
         Q::Product(l, r) | Q::Join { l, r, .. } => arity(l, s) + arity(r, s),
@@ -91,6 +92,7 @@ fn reference(q: &Q, s: &Shadow) -> BTreeSet<Row> {
             .filter(|t| t[*col] == *val)
             .collect(),
         Q::Project { e, cols } => reference(e, s).iter().map(|t| key(t, cols)).collect(),
+        Q::Distinct(e) => reference(e, s),
         Q::Union(l, r) => &reference(l, s) | &reference(r, s),
         Q::Intersect(l, r) => &reference(l, s) & &reference(r, s),
         Q::Difference(l, r) => &reference(l, s) - &reference(r, s),
@@ -127,6 +129,7 @@ fn build(q: &Q, s: &Shadow) -> Expr {
             let cols = cols.clone();
             Project::new(build(e, s), move |t: &Row| key(t, &cols)).into()
         }
+        Q::Distinct(e) => Distinct::new(build(e, s)).into(),
         Q::Union(l, r) => Union::new(build(l, s), build(r, s)).into(),
         Q::Intersect(l, r) => Intersect::new(build(l, s), build(r, s)).into(),
         Q::Difference(l, r) => Difference::new(build(l, s), build(r, s)).into(),
@@ -151,17 +154,6 @@ fn rel_name(i: usize) -> String {
     format!("r{}", i)
 }
 
-fn has_difference(q: &Q) -> bool {
-    match q {
-        Q::Rel(_) | Q::View(_) | Q::Empty(_) | Q::Singleton(_) => false,
-        Q::Select { e, .. } | Q::Project { e, .. } => has_difference(e),
-        Q::Difference(..) => true,
-        Q::Union(l, r) | Q::Intersect(l, r) | Q::Product(l, r) | Q::Join { l, r, .. } => {
-            has_difference(l) || has_difference(r)
-        }
-    }
-}
-
 /// A cursor over the random bytes that drive the program.
 struct Bytes<'a> {
     data: &'a [u8],
@@ -184,8 +176,7 @@ impl<'a> Bytes<'a> {
     }
 }
 
-/// Decodes a query of the given maximal depth. When `allow_diff` is false the
-/// query is suitable for a stored view.
+/// Decodes a query of the given maximal depth.
 fn gen_query(b: &mut Bytes, s: &Shadow, domain: u32, depth: usize, allow_diff: bool) -> Q {
     let leaf = |b: &mut Bytes, s: &Shadow| -> Q {
         match b.pick(8) {
@@ -205,6 +196,9 @@ fn gen_query(b: &mut Bytes, s: &Shadow, domain: u32, depth: usize, allow_diff: b
         0 | 1 => leaf(b, s),
         2 => {
             let e = gen_query(b, s, domain, depth - 1, allow_diff);
+            if b.pick(4) == 0 {
+                return Q::Distinct(Box::new(e));
+            }
             let a = arity(&e, s);
             let col = b.pick(a);
             let val = b.pick(domain as usize) as u32;
@@ -300,6 +294,7 @@ fn check(db: &Database, s: &Shadow, q: &Q, trace: &[String]) -> usize {
 #[derive(Default, Debug, Clone, Copy)]
 struct Stats {
     inserts: usize,
+    retracts: usize,
     views: usize,
     checks: usize,
     forks: usize,
@@ -328,7 +323,7 @@ fn run(data: &[u8]) -> Stats {
 
     while !b.done() {
         let k = b.pick(states.len());
-        match b.pick(8) {
+        match b.pick(9) {
             0..=2 => {
                 let i = b.pick(n_rels);
                 let (db, s) = &mut states[k];
@@ -339,10 +334,27 @@ fn run(data: &[u8]) -> Stats {
                 stats.inserts += 1;
                 stats.max_rows = stats.max_rows.max(s.rels[i].len());
             }
+            8 => {
+                let i = b.pick(n_rels);
+                let (db, s) = &mut states[k];
+                // retract a mix of absent and present tuples:
+                let mut rows = gen_rows(&mut b, s.arities[i], domain);
+                let present: Vec<Row> = s.rels[i].iter().cloned().collect();
+                for _ in 0..b.pick(3) {
+                    if !present.is_empty() {
+                        rows.push(present[b.pick(present.len())].clone());
+                    }
+                }
+                trace.push(format!("db{}: retract {:?} from r{}", k, rows, i));
+                db.retract(&relations[i], rows.clone().into()).unwrap();
+                for row in rows {
+                    s.rels[i].remove(&row);
+                }
+                stats.retracts += 1;
+            }
             3 => {
                 let (db, s) = &mut states[k];
-                let q = gen_query(&mut b, s, domain, 3, false);
-                assert!(!has_difference(&q));
+                let q = gen_query(&mut b, s, domain, 3, true);
                 trace.push(format!("db{}: store view {:?}", k, q));
                 let a = arity(&q, s);
                 let view = db
@@ -405,6 +417,7 @@ fn generator_is_not_degenerate() {
             .collect();
         let st = run(&data);
         total.inserts += st.inserts;
+        total.retracts += st.retracts;
         total.views += st.views;
         total.checks += st.checks;
         total.forks += st.forks;
@@ -412,7 +425,7 @@ fn generator_is_not_degenerate() {
         total.max_result = total.max_result.max(st.max_result);
     }
     eprintln!("harness totals over 500 programs: {:?}", total);
-    assert!(total.views > 500 && total.checks > 1000 && total.forks > 100);
+    assert!(total.views > 500 && total.checks > 1000 && total.forks > 100 && total.retracts > 300);
 }
 
 proptest! {

@@ -20,7 +20,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use instance::{DynInstance, Instance};
+use instance::{consolidate, Batch, DynInstance, Instance};
 
 /// Contains the information about an instance in the database.
 struct RelationEntry {
@@ -42,7 +42,7 @@ impl RelationEntry {
         T: Tuple + 'static,
     {
         Self {
-            instance: Box::new(Instance::<T>::new()),
+            instance: Box::new(Instance::<T>::new(true)),
             dependent_views: HashSet::new(),
             stabilizing: Cell::new(false),
         }
@@ -181,7 +181,17 @@ impl Database {
         T: Tuple,
         E: ExpressionExt<T>,
     {
-        expression.collect_recent(&evaluate::Evaluator::new(self))
+        // reflect every pending change in the instances the expression reads:
+        for r in expression.relation_dependencies() {
+            self.stabilize_relation(r)?;
+        }
+        for v in expression.view_dependencies() {
+            self.stabilize_view(v)?;
+        }
+
+        let collector = evaluate::IncrementalCollector::new(self);
+        let batches = expression.collect_stable(&collector)?;
+        Ok(consolidate(&batches).positives())
     }
 
     /// Adds a new relation instance identified by `name` to the database and returns a
@@ -199,13 +209,25 @@ impl Database {
         }
     }
 
-    /// Inserts tuples in the instance corresponding to `relation`.
+    /// Inserts tuples in the instance corresponding to `relation`. Tuples that are already
+    /// present are ignored.
     pub fn insert<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
     where
         T: Tuple + 'static,
     {
         let instance = self.relation_instance(relation)?;
-        instance.insert(tuples);
+        instance.insert(Batch::from_set(&tuples, 1));
+        Ok(())
+    }
+
+    /// Removes tuples from the instance corresponding to `relation`. Tuples that are not
+    /// present are ignored.
+    pub fn retract<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
+    where
+        T: Tuple + 'static,
+    {
+        let instance = self.relation_instance(relation)?;
+        instance.insert(Batch::from_set(&tuples, -1));
         Ok(())
     }
 
@@ -420,7 +442,7 @@ mod tests {
             let r = database.add_relation::<i32>("r").unwrap();
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
             assert_eq!(
-                Tuples::<i32>::from(vec![1, 2, 3]),
+                Batch::from_set(&Tuples::<i32>::from(vec![1, 2, 3]), 1),
                 database.relation_instance(&r).unwrap().to_add()[0]
             );
         }
@@ -430,11 +452,11 @@ mod tests {
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
             assert!(database.insert(&r, vec![1, 4].into()).is_ok());
             assert_eq!(
-                Tuples::<i32>::from(vec![1, 2, 3]),
+                Batch::from_set(&Tuples::<i32>::from(vec![1, 2, 3]), 1),
                 database.relation_instance(&r).unwrap().to_add()[0]
             );
             assert_eq!(
-                Tuples::<i32>::from(vec![1, 4]),
+                Batch::from_set(&Tuples::<i32>::from(vec![1, 4]), 1),
                 database.relation_instance(&r).unwrap().to_add()[1]
             );
         }

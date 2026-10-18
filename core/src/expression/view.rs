@@ -41,8 +41,13 @@ pub struct ViewRef(pub(crate) i32);
 /// );
 ///
 /// use codd::expression::Difference;
-/// // incremental view update for `Difference` is currently not supported:
-/// assert!(db.store_view(Difference::new(dividends, divisors)).is_err());
+/// // views over `Difference` are maintained incrementally too, including retractions:
+/// let not_divisors = db.store_view(Difference::new(dividends.clone(), divisors.clone())).unwrap();
+/// assert_eq!(vec![6, 12, 18, 24, 30], db.evaluate(&not_divisors).unwrap().into_tuples());
+/// db.insert(&divisors, vec![12].into()).unwrap();
+/// assert_eq!(vec![6, 18, 24, 30], db.evaluate(&not_divisors).unwrap().into_tuples());
+/// db.retract(&divisors, vec![12].into()).unwrap();
+/// assert_eq!(vec![6, 12, 18, 24, 30], db.evaluate(&not_divisors).unwrap().into_tuples());
 /// ```
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct View<T, E>
