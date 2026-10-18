@@ -28,7 +28,6 @@ pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T
 /// Applies `result` on elements of `slice`.
 #[inline(always)]
 pub(crate) fn project_helper<T>(slice: &[T], mut result: impl FnMut(&T)) {
-    let slice = slice;
     for tuple in slice {
         result(tuple);
     }
@@ -37,9 +36,6 @@ pub(crate) fn project_helper<T>(slice: &[T], mut result: impl FnMut(&T)) {
 /// Applies `result` on every pair of `left` and `right` slices.
 #[inline(always)]
 pub(crate) fn product_helper<L, R>(left: &[L], right: &[R], mut result: impl FnMut(&L, &R)) {
-    let left = left;
-    let right = right;
-
     for l in left {
         for r in right {
             result(l, r);
