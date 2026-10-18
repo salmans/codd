@@ -72,7 +72,7 @@ where
 
     /// Returns a mutable reference (of type [`RefMut`]) to the projecting closure.
     #[inline(always)]
-    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&S) -> T> {
+    pub(crate) fn mapper_mut(&self) -> RefMut<'_, dyn FnMut(&S) -> T> {
         self.mapper.borrow_mut()
     }
 
@@ -99,12 +99,13 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_project(&self);
+        visitor.visit_project(self);
     }
 }
 
 // A hack:
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<S, E>
 where
     S: Tuple,

@@ -108,10 +108,10 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         let right_stable = intersect.right().collect_stable(&incremental)?;
 
         for batch in left_stable.iter() {
-            intersect_helper(&batch, &right_recent, |t| result.push(t.clone()))
+            intersect_helper(batch, &right_recent, |t| result.push(t.clone()))
         }
         for batch in right_stable.iter() {
-            intersect_helper(&left_recent, &batch, |t| result.push(t.clone()))
+            intersect_helper(&left_recent, batch, |t| result.push(t.clone()))
         }
 
         intersect_helper(&left_recent, &right_recent, |t| result.push(t.clone()));
@@ -136,7 +136,7 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         let right_stable_slices = right_stable.iter().map(|t| &t[..]).collect::<Vec<_>>();
 
         for batch in left_stable.iter() {
-            diff_helper(&batch, &right_stable_slices, |t| result.push(t.clone()));
+            diff_helper(batch, &right_stable_slices, |t| result.push(t.clone()));
         }
 
         diff_helper(&left_recent, &right_stable_slices, |t| {
@@ -182,10 +182,10 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         let mut mapper = product.mapper_mut();
 
         for batch in left_stable.iter() {
-            product_helper(&batch, &right_recent, |v1, v2| result.push(mapper(v1, v2)));
+            product_helper(batch, &right_recent, |v1, v2| result.push(mapper(v1, v2)));
         }
         for batch in right_stable.iter() {
-            product_helper(&left_recent, &batch, |v1, v2| result.push(mapper(v1, v2)));
+            product_helper(&left_recent, batch, |v1, v2| result.push(mapper(v1, v2)));
         }
 
         product_helper(&left_recent, &right_recent, |v1, v2| {
@@ -214,31 +214,31 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         let mut right_key = join.right_key_mut();
 
         let left_recent = join.left().collect_recent(self)?;
-        let left_recent: Tuples<(K, &L)> = left_recent.iter().map(|t| (left_key(&t), t)).into();
+        let left_recent: Tuples<(K, &L)> = left_recent.iter().map(|t| (left_key(t), t)).into();
         let right_recent = join.right().collect_recent(self)?;
-        let right_recent: Tuples<(K, &R)> = right_recent.iter().map(|t| (right_key(&t), t)).into();
+        let right_recent: Tuples<(K, &R)> = right_recent.iter().map(|t| (right_key(t), t)).into();
 
         let left_stable = join.left().collect_stable(&incremental)?;
         let left_stable: Vec<Tuples<(K, &L)>> = left_stable
             .iter()
-            .map(|batch| batch.iter().map(|t| (left_key(&t), t)).into())
+            .map(|batch| batch.iter().map(|t| (left_key(t), t)).into())
             .collect();
 
         let right_stable = join.right().collect_stable(&incremental)?;
         let right_stable: Vec<Tuples<(K, &R)>> = right_stable
             .iter()
-            .map(|batch| batch.iter().map(|t| (right_key(&t), t)).into())
+            .map(|batch| batch.iter().map(|t| (right_key(t), t)).into())
             .collect();
 
         let mut joiner = join.mapper_mut();
 
         for batch in left_stable.iter() {
-            join_helper(&batch, &right_recent, |k, v1, v2| {
+            join_helper(batch, &right_recent, |k, v1, v2| {
                 result.push(joiner(k, v1, v2))
             });
         }
         for batch in right_stable.iter() {
-            join_helper(&left_recent, &batch, |k, v1, v2| {
+            join_helper(&left_recent, batch, |k, v1, v2| {
                 result.push(joiner(k, v1, v2))
             });
         }
@@ -290,7 +290,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         T: Tuple + 'static,
     {
         let mut result = Vec::<Tuples<T>>::new();
-        let table = self.database.relation_instance(&relation)?;
+        let table = self.database.relation_instance(relation)?;
         for batch in table.stable().iter() {
             result.push(batch.clone());
         }
@@ -329,12 +329,12 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
 
         for batch in left_stable.iter() {
             let mut tuples = Vec::new();
-            project_helper(&batch, |t| tuples.push(t.clone()));
+            project_helper(batch, |t| tuples.push(t.clone()));
             result.push(tuples.into());
         }
         for batch in right_stable.iter() {
             let mut tuples = Vec::new();
-            project_helper(&batch, |t| tuples.push(t.clone()));
+            project_helper(batch, |t| tuples.push(t.clone()));
             result.push(tuples.into());
         }
 
@@ -357,7 +357,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         for left_batch in left.iter() {
             let mut tuples = Vec::new();
             for right_batch in right.iter() {
-                intersect_helper(&left_batch, &right_batch, |t| tuples.push(t.clone()));
+                intersect_helper(left_batch, right_batch, |t| tuples.push(t.clone()));
             }
             result.push(tuples.into());
         }
@@ -380,7 +380,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
 
         for batch in left.iter() {
             let mut tuples = Vec::new();
-            diff_helper(&batch, &right_slices, |t| tuples.push(t.clone()));
+            diff_helper(batch, &right_slices, |t| tuples.push(t.clone()));
             result.push(tuples.into());
         }
         Ok(result)
@@ -397,7 +397,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         let mut mapper = project.mapper_mut();
         for batch in stable.iter() {
             let mut tuples = Vec::new();
-            project_helper(&batch, |t| tuples.push(mapper(t)));
+            project_helper(batch, |t| tuples.push(mapper(t)));
             result.push(tuples.into());
         }
         Ok(result)
@@ -422,7 +422,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         for left_batch in left.iter() {
             let mut tuples = Vec::new();
             for right_batch in right.iter() {
-                product_helper(&left_batch, &right_batch, |v1, v2| {
+                product_helper(left_batch, right_batch, |v1, v2| {
                     tuples.push(mapper(v1, v2))
                 });
             }
@@ -450,20 +450,20 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         let left = join.left().collect_stable(self)?;
         let left: Vec<Tuples<(K, &L)>> = left
             .iter()
-            .map(|batch| batch.iter().map(|t| (left_key(&t), t)).into())
+            .map(|batch| batch.iter().map(|t| (left_key(t), t)).into())
             .collect();
 
         let right = join.right().collect_stable(self)?;
         let right: Vec<Tuples<(K, &R)>> = right
             .iter()
-            .map(|batch| batch.iter().map(|t| (right_key(&t), t)).into())
+            .map(|batch| batch.iter().map(|t| (right_key(t), t)).into())
             .collect();
 
         let mut joiner = join.mapper_mut();
         for left_batch in left.iter() {
             let mut tuples = Vec::new();
             for right_batch in right.iter() {
-                join_helper(&left_batch, &right_batch, |k, v1, v2| {
+                join_helper(left_batch, right_batch, |k, v1, v2| {
                     tuples.push(joiner(k, v1, v2))
                 });
             }
@@ -478,7 +478,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         E: ExpressionExt<T> + 'static,
     {
         let mut result = Vec::<Tuples<T>>::new();
-        let table = self.database.view_instance(&view)?;
+        let table = self.database.view_instance(view)?;
         for batch in table.stable().iter() {
             result.push(batch.clone());
         }
@@ -531,7 +531,7 @@ impl<'d> RecentCollector for Evaluator<'d> {
     {
         // stabilize the instance corresponding to this relation before evaluating the relation:
         self.database.stabilize_relation(relation.name())?;
-        let table = self.database.relation_instance(&relation)?;
+        let table = self.database.relation_instance(relation)?;
 
         assert!(table.recent().is_empty());
         assert!(table.to_add().is_empty());
@@ -553,10 +553,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
     {
         // stabilize the dependencies of the expression before evaluating it:
         for r in select.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in select.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);
@@ -575,10 +575,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
         R: ExpressionExt<T>,
     {
         for r in union.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in union.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);
@@ -597,10 +597,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
         R: ExpressionExt<T>,
     {
         for r in intersect.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in intersect.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);
@@ -623,10 +623,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
         R: ExpressionExt<T>,
     {
         for r in difference.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in difference.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);
@@ -646,10 +646,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
         E: ExpressionExt<S>,
     {
         for r in project.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in project.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);
@@ -673,10 +673,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
         Right: ExpressionExt<R>,
     {
         for r in product.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in product.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);
@@ -702,10 +702,10 @@ impl<'d> RecentCollector for Evaluator<'d> {
         Right: ExpressionExt<R>,
     {
         for r in join.relation_dependencies() {
-            self.database.stabilize_relation(&r)?;
+            self.database.stabilize_relation(r)?;
         }
         for r in join.view_dependencies() {
-            self.database.stabilize_view(&r)?;
+            self.database.stabilize_view(r)?;
         }
 
         let incremental = IncrementalCollector::new(self.database);

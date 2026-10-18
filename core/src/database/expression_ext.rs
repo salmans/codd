@@ -296,14 +296,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_view(&self)
+            collector.collect_view(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_view(&self)
+            collector.collect_view(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -327,14 +327,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_intersect(&self)
+            collector.collect_intersect(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_intersect(&self)
+            collector.collect_intersect(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -358,14 +358,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_union(&self)
+            collector.collect_union(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_union(&self)
+            collector.collect_union(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -389,14 +389,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_difference(&self)
+            collector.collect_difference(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_difference(&self)
+            collector.collect_difference(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -418,14 +418,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_empty(&self)
+            collector.collect_empty(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_empty(&self)
+            collector.collect_empty(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -447,14 +447,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_full(&self)
+            collector.collect_full(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_full(&self)
+            collector.collect_full(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -481,14 +481,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_join(&self)
+            collector.collect_join(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_join(&self)
+            collector.collect_join(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -591,14 +591,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_product(&self)
+            collector.collect_product(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_product(&self)
+            collector.collect_product(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -622,14 +622,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_project(&self)
+            collector.collect_project(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_project(&self)
+            collector.collect_project(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -651,14 +651,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_relation(&self)
+            collector.collect_relation(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_relation(&self)
+            collector.collect_relation(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -681,14 +681,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_select(&self)
+            collector.collect_select(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_select(&self)
+            collector.collect_select(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -710,14 +710,14 @@ mod r#impl {
         where
             C: RecentCollector,
         {
-            collector.collect_singleton(&self)
+            collector.collect_singleton(self)
         }
 
         fn collect_stable<C>(&self, collector: &C) -> Result<Vec<crate::Tuples<T>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_singleton(&self)
+            collector.collect_singleton(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {

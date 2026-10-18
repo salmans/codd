@@ -98,7 +98,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_intersect(&self);
+        visitor.visit_intersect(self);
     }
 }
 

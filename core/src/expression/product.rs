@@ -86,7 +86,7 @@ where
 
     /// Returns a mutable reference (of type [`RefMut`]) to the mapping closure.
     #[inline(always)]
-    pub fn mapper_mut(&self) -> RefMut<dyn FnMut(&L, &R) -> T> {
+    pub fn mapper_mut(&self) -> RefMut<'_, dyn FnMut(&L, &R) -> T> {
         self.mapper.borrow_mut()
     }
 
@@ -115,12 +115,13 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_product(&self);
+        visitor.visit_product(self);
     }
 }
 
 // A hack for debugging purposes:
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<L, R, Left, Right>
 where
     L: Tuple,

@@ -28,7 +28,7 @@ pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T
 /// Applies `result` on elements of `slice`.
 #[inline(always)]
 pub(crate) fn project_helper<T>(slice: &[T], mut result: impl FnMut(&T)) {
-    let slice = &slice[..];
+    let slice = slice;
     for tuple in slice {
         result(tuple);
     }
@@ -37,12 +37,12 @@ pub(crate) fn project_helper<T>(slice: &[T], mut result: impl FnMut(&T)) {
 /// Applies `result` on every pair of `left` and `right` slices.
 #[inline(always)]
 pub(crate) fn product_helper<L, R>(left: &[L], right: &[R], mut result: impl FnMut(&L, &R)) {
-    let left = &left[..];
-    let right = &right[..];
+    let left = left;
+    let right = right;
 
     for l in left {
         for r in right {
-            result(&l, &r);
+            result(l, r);
         }
     }
 }
@@ -60,8 +60,8 @@ pub(crate) fn join_helper<Key: Ord, L, R>(
     right: &[(Key, R)],
     mut result: impl FnMut(&Key, &L, &R),
 ) {
-    let mut slice1 = &left[..];
-    let mut slice2 = &right[..];
+    let mut slice1 = left;
+    let mut slice2 = right;
 
     while !slice1.is_empty() && !slice2.is_empty() {
         use std::cmp::Ordering;
@@ -90,8 +90,8 @@ pub(crate) fn join_helper<Key: Ord, L, R>(
 /// that are equal.
 #[inline(always)]
 pub(crate) fn intersect_helper<T: Ord>(left: &[T], right: &[T], mut result: impl FnMut(&T)) {
-    let mut left = &left[..];
-    let mut right = &right[..];
+    let mut left = left;
+    let mut right = right;
 
     while !left.is_empty() && !right.is_empty() {
         use std::cmp::Ordering;
@@ -112,28 +112,15 @@ pub(crate) fn intersect_helper<T: Ord>(left: &[T], right: &[T], mut result: impl
 /// in none of the slices of `right`.
 #[inline(always)]
 pub(crate) fn diff_helper<T: Ord>(left: &[T], right: &[&[T]], mut result: impl FnMut(&T)) {
-    let left = &left[..];
     let mut right = right.iter().map(|sl| &sl[..]).collect::<Vec<&[T]>>();
 
     for tuple in left {
         let mut to_add = true;
-        for mut to_find in &mut right {
-            use std::cmp::Ordering;
-
-            if !to_find.is_empty() {
-                match tuple.cmp(&to_find[0]) {
-                    Ordering::Less => {}
-                    Ordering::Equal => {
-                        to_add = false;
-                    }
-                    Ordering::Greater => {
-                        let mut temp = gallop(to_find, |x| x < tuple);
-                        to_find = &mut temp;
-                        if !to_find.is_empty() && tuple == &to_find[0] {
-                            to_add = false;
-                        }
-                    }
-                }
+        for to_find in right.iter_mut() {
+            // `left` is sorted, so everything below `tuple` can be skipped for good:
+            *to_find = gallop(to_find, |x| x < tuple);
+            if !to_find.is_empty() && tuple == &to_find[0] {
+                to_add = false;
             }
         }
 

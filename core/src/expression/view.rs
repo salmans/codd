@@ -91,7 +91,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_view(&self);
+        visitor.visit_view(self);
     }
 }
 

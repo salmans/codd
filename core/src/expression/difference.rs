@@ -101,7 +101,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_difference(&self);
+        visitor.visit_difference(self);
     }
 }
 

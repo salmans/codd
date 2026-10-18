@@ -70,7 +70,7 @@ where
 
     /// Returns a mutable reference (of type [`RefMut`]) to the select predicate.
     #[inline(always)]
-    pub(crate) fn predicate_mut(&self) -> RefMut<dyn FnMut(&T) -> bool> {
+    pub(crate) fn predicate_mut(&self) -> RefMut<'_, dyn FnMut(&T) -> bool> {
         self.predicate.borrow_mut()
     }
 
@@ -96,11 +96,12 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_select(&self);
+        visitor.visit_select(self);
     }
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<T, E>
 where
     T: Tuple,

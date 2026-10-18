@@ -32,8 +32,8 @@ impl<T: Tuple> Tuples<T> {
     /// instance.
     pub(crate) fn merge(self, other: Self) -> Self {
         let mut tuples = Vec::with_capacity(self.items.len() + other.items.len());
-        tuples.extend(self.items.into_iter());
-        tuples.extend(other.items.into_iter());
+        tuples.extend(self.items);
+        tuples.extend(other.items);
         tuples.into()
     }
 
@@ -133,21 +133,21 @@ impl<T: Tuple> Instance<T> {
     /// Returns an immutable reference (of type [`Ref`]) to the stable tuples
     /// of this instance.
     #[inline(always)]
-    pub fn stable(&self) -> Ref<Vec<Tuples<T>>> {
+    pub fn stable(&self) -> Ref<'_, Vec<Tuples<T>>> {
         self.stable.borrow()
     }
 
     /// Returns an immutable reference (of type [`Ref`]) to the recent tuples
     /// of this instance.
     #[inline(always)]
-    pub fn recent(&self) -> Ref<Tuples<T>> {
+    pub fn recent(&self) -> Ref<'_, Tuples<T>> {
         self.recent.borrow()
     }
 
     /// Returns an immutable reference (of type [`Ref`]) to the candidates to
     /// be added to the recent tuples of this instance (if they already don't exist).
     #[inline(always)]
-    pub fn to_add(&self) -> Ref<Vec<Tuples<T>>> {
+    pub fn to_add(&self) -> Ref<'_, Vec<Tuples<T>>> {
         self.to_add.borrow()
     }
 }

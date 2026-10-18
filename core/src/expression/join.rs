@@ -117,20 +117,20 @@ where
     /// Returns a mutable reference (of type [`RefMut`]) of the key closure for
     /// the left sub-expression.
     #[inline(always)]
-    pub(crate) fn left_key_mut(&self) -> RefMut<dyn FnMut(&L) -> K> {
+    pub(crate) fn left_key_mut(&self) -> RefMut<'_, dyn FnMut(&L) -> K> {
         self.left_key.borrow_mut()
     }
 
     /// Returns a mutable reference (of type [`RefMut`]) of the key closure for
     /// the right sub-expression.
     #[inline(always)]
-    pub(crate) fn right_key_mut(&self) -> RefMut<dyn FnMut(&R) -> K> {
+    pub(crate) fn right_key_mut(&self) -> RefMut<'_, dyn FnMut(&R) -> K> {
         self.right_key.borrow_mut()
     }
 
     /// Returns a mutable reference (of type [`RefMut`]) to the joining closure.
     #[inline(always)]
-    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&K, &L, &R) -> T> {
+    pub(crate) fn mapper_mut(&self) -> RefMut<'_, dyn FnMut(&K, &L, &R) -> T> {
         self.mapper.borrow_mut()
     }
 
@@ -160,12 +160,13 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_join(&self);
+        visitor.visit_join(self);
     }
 }
 
 // A hack for debugging purposes:
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<L, R, Left, Right>
 where
     L: Tuple,

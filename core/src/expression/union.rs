@@ -98,7 +98,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_union(&self);
+        visitor.visit_union(self);
     }
 }
 
