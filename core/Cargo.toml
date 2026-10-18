@@ -17,3 +17,5 @@ either = "^1.6"
 
 [features]
 unstable = []
+[dev-dependencies]
+proptest = "1"
