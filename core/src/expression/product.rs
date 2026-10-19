@@ -1,10 +1,6 @@
 use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
-use std::{
-    cell::{RefCell, RefMut},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{marker::PhantomData, rc::Rc};
 
 /// Corresponds to the cartesian product of two expression.
 ///
@@ -34,7 +30,7 @@ where
 {
     left: Left,
     right: Right,
-    mapper: Rc<RefCell<dyn FnMut(&L, &R) -> T>>,
+    mapper: Rc<dyn Fn(&L, &R) -> T>,
     relation_deps: Vec<String>,
     view_deps: Vec<ViewRef>,
 }
@@ -49,7 +45,7 @@ where
 {
     /// Creates a [`Product`] expression over `left` and `right` with `mapper` as the closure
     /// that produces the tuples of the resulting expression from tuples of `left` and `right`.
-    pub fn new<IL, IR>(left: IL, right: IR, project: impl FnMut(&L, &R) -> T + 'static) -> Self
+    pub fn new<IL, IR>(left: IL, right: IR, project: impl Fn(&L, &R) -> T + 'static) -> Self
     where
         IL: IntoExpression<L, Left>,
         IR: IntoExpression<R, Right>,
@@ -58,15 +54,12 @@ where
         let left = left.into_expression();
         let right = right.into_expression();
 
-        let mut deps = dependency::DependencyVisitor::new();
-        left.visit(&mut deps);
-        right.visit(&mut deps);
-        let (relation_deps, view_deps) = deps.into_dependencies();
+        let (relation_deps, view_deps) = dependency::binary_dependencies(&left, &right);
 
         Self {
             left,
             right,
-            mapper: Rc::new(RefCell::new(project)),
+            mapper: Rc::new(project),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
         }
@@ -84,10 +77,10 @@ where
         &self.right
     }
 
-    /// Returns a mutable reference (of type [`RefMut`]) to the mapping closure.
+    /// Returns the mapping closure.
     #[inline(always)]
-    pub fn mapper_mut(&self) -> RefMut<dyn FnMut(&L, &R) -> T> {
-        self.mapper.borrow_mut()
+    pub(crate) fn mapper(&self) -> &dyn Fn(&L, &R) -> T {
+        &*self.mapper
     }
 
     /// Returns a reference to the relation dependencies of the receiver.
@@ -115,12 +108,13 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_product(&self);
+        visitor.visit_product(self);
     }
 }
 
 // A hack for debugging purposes:
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<L, R, Left, Right>
 where
     L: Tuple,

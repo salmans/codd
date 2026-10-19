@@ -1,7 +1,7 @@
 /*! Implements a minimal database with the following features:
 * Relation and view instances are generic over [`Tuple`] types.
-* Supports incremental view update by keeping track of recently added tuples.
-* Relation instances monotonically grow (supports insertion but not deletion).
+* Views are maintained incrementally from weighted changes (insertions and retractions).
+* Clones share immutable storage and diverge independently.
 */
 mod evaluate;
 mod expression_ext;
@@ -18,9 +18,10 @@ pub use instance::Tuples;
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
-use instance::{DynInstance, Instance};
+use instance::{consolidate, Batch, DynInstance, Instance, Weights};
 
 /// Contains the information about an instance in the database.
 struct RelationEntry {
@@ -42,7 +43,7 @@ impl RelationEntry {
         T: Tuple + 'static,
     {
         Self {
-            instance: Box::new(Instance::<T>::new()),
+            instance: Box::new(Instance::<T>::new(Weights::Set)),
             dependent_views: HashSet::new(),
             stabilizing: Cell::new(false),
         }
@@ -160,15 +161,26 @@ impl Clone for ViewEntry {
 /// assert_eq!(vec![15, 23, 101, 1001], odds_data.into_tuples());
 /// ```
 pub struct Database {
+    /// Distinguishes this database from every other one in the process, clones included,
+    /// so that views it stores get references no other database issues.
+    id: u64,
     relations: HashMap<String, RelationEntry>,
     views: HashMap<ViewRef, ViewEntry>,
-    view_counter: i32,
+    view_counter: u32,
 }
 
+/// Issues database ids, deterministically in creation order.
+static NEXT_DATABASE_ID: AtomicU64 = AtomicU64::new(0);
+
 impl Database {
+    fn fresh_id() -> u64 {
+        NEXT_DATABASE_ID.fetch_add(1, Ordering::Relaxed)
+    }
+
     /// Creates a new empty database.
     pub fn new() -> Self {
         Self {
+            id: Self::fresh_id(),
             relations: HashMap::new(),
             views: HashMap::new(),
             view_counter: 0,
@@ -181,7 +193,17 @@ impl Database {
         T: Tuple,
         E: ExpressionExt<T>,
     {
-        expression.collect_recent(&evaluate::Evaluator::new(self))
+        // reflect every pending change in the instances the expression reads:
+        for r in expression.relation_dependencies() {
+            self.stabilize_relation(r)?;
+        }
+        for v in expression.view_dependencies() {
+            self.stabilize_view(v)?;
+        }
+
+        let collector = evaluate::IncrementalCollector::new(self);
+        let batches = expression.collect_stable(&collector)?;
+        Ok(consolidate(&batches).positives())
     }
 
     /// Adds a new relation instance identified by `name` to the database and returns a
@@ -199,13 +221,25 @@ impl Database {
         }
     }
 
-    /// Inserts tuples in the instance corresponding to `relation`.
+    /// Inserts tuples in the instance corresponding to `relation`. Tuples that are already
+    /// present are ignored.
     pub fn insert<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
     where
         T: Tuple + 'static,
     {
-        let instance = self.relation_instance(&relation)?;
-        instance.insert(tuples);
+        let instance = self.relation_instance(relation)?;
+        instance.insert(Batch::from_set(&tuples, 1));
+        Ok(())
+    }
+
+    /// Removes tuples from the instance corresponding to `relation`. Tuples that are not
+    /// present are ignored.
+    pub fn retract<T>(&self, relation: &Relation<T>, tuples: Tuples<T>) -> Result<(), Error>
+    where
+        T: Tuple + 'static,
+    {
+        let instance = self.relation_instance(relation)?;
+        instance.insert(Batch::from_set(&tuples, -1));
         Ok(())
     }
 
@@ -214,14 +248,19 @@ impl Database {
     where
         T: Tuple + 'static,
     {
-        let result = self
+        let entry = self
             .relations
             .get(relation.name())
-            .and_then(|r| r.instance.as_any().downcast_ref::<Instance<T>>())
             .ok_or(Error::InstanceNotFound {
                 name: relation.name().into(),
             })?;
-        Ok(result)
+        entry
+            .instance
+            .as_any()
+            .downcast_ref::<Instance<T>>()
+            .ok_or(Error::TypeMismatch {
+                name: relation.name().into(),
+            })
     }
 
     /// Stores a new view over `expression` and returns a [`View`] objeect that can be
@@ -233,13 +272,35 @@ impl Database {
         I: IntoExpression<T, E>,
     {
         let expression = expression.into_expression();
-        // `validator` rejects views over `Difference` (not supported):
+        // rejects expressions that cannot be materialized (`Full`):
         validate::validate_view_expression(&expression)?;
 
         let (relation_deps, view_deps) = dependency::expression_dependencies(&expression);
 
+        // Every dependency must exist with the expected tuple type before anything is
+        // registered, so that a failing `store_view` leaves the database untouched:
+        for r in relation_deps.iter() {
+            if !self.relations.contains_key(r) {
+                return Err(Error::InstanceNotFound { name: r.clone() });
+            }
+        }
+        for v in view_deps.iter() {
+            if !self.views.contains_key(v) {
+                return Err(Error::InstanceNotFound {
+                    name: format!("{:?}", v),
+                });
+            }
+        }
+
         let mut entry = ViewEntry::new(ViewInstance::new(expression));
-        let reference = ViewRef(self.view_counter);
+        let reference = ViewRef {
+            owner: self.id,
+            index: self.view_counter,
+        };
+
+        // Initialize the view from the stable tuples of its dependencies. This may still
+        // fail (for example on a tuple type mismatch); nothing has been registered yet.
+        entry.instance.initialize(self)?;
 
         // track relation dependencies of this view:
         for r in relation_deps.into_iter() {
@@ -257,8 +318,6 @@ impl Database {
             entry.dependee_views.insert(r.clone());
         }
 
-        entry.instance.initialize(self)?;
-
         self.views.insert(reference.clone(), entry);
         self.view_counter += 1;
 
@@ -271,11 +330,17 @@ impl Database {
         T: Tuple + 'static,
         E: Expression<T> + 'static,
     {
-        let result = self
+        let entry = self
             .views
             .get(view.reference())
-            .and_then(|v| v.instance.as_any().downcast_ref::<ViewInstance<T, E>>())
             .ok_or(Error::InstanceNotFound {
+                name: format!("{:?}", view.reference()),
+            })?;
+        let result = entry
+            .instance
+            .as_any()
+            .downcast_ref::<ViewInstance<T, E>>()
+            .ok_or(Error::TypeMismatch {
                 name: format!("{:?}", view.reference()),
             })?;
         Ok(result.instance())
@@ -290,8 +355,7 @@ impl Database {
             if entry.stabilizing.get() {
                 return Ok(());
             }
-
-            entry.stabilizing.set(true);
+            let _guard = StabilizingGuard::new(&entry.stabilizing);
 
             for r in entry.dependee_relations.iter() {
                 self.stabilize_relation(r)?;
@@ -302,14 +366,19 @@ impl Database {
 
             while entry.instance.instance().changed() {
                 for r in entry.dependent_views.iter() {
-                    self.views.get(r).unwrap().instance.stabilize(&self)?;
+                    self.dependent_view(r)?.instance.stabilize(self)?;
                 }
             }
-
-            entry.stabilizing.set(false);
         }
 
         Ok(())
+    }
+
+    /// Returns the entry of a view that is registered as a dependent of another instance.
+    fn dependent_view(&self, view_ref: &ViewRef) -> Result<&ViewEntry, Error> {
+        self.views.get(view_ref).ok_or(Error::InstanceNotFound {
+            name: format!("{:?}", view_ref),
+        })
     }
 
     /// Stabilizes the relation identified by `name`. It also stabilizes
@@ -320,19 +389,33 @@ impl Database {
             if entry.stabilizing.get() {
                 return Ok(());
             }
-
-            entry.stabilizing.set(true);
+            let _guard = StabilizingGuard::new(&entry.stabilizing);
 
             while entry.instance.changed() {
                 for r in entry.dependent_views.iter() {
-                    self.views.get(r).unwrap().instance.stabilize(&self)?;
+                    self.dependent_view(r)?.instance.stabilize(self)?;
                 }
             }
-
-            entry.stabilizing.set(false);
         }
 
         Ok(())
+    }
+}
+
+/// Sets a `stabilizing` flag for the duration of a stabilization and clears it when
+/// dropped, including on early returns with an error.
+struct StabilizingGuard<'a>(&'a Cell<bool>);
+
+impl<'a> StabilizingGuard<'a> {
+    fn new(flag: &'a Cell<bool>) -> Self {
+        flag.set(true);
+        Self(flag)
+    }
+}
+
+impl Drop for StabilizingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
     }
 }
 
@@ -355,6 +438,7 @@ impl Clone for Database {
         });
 
         Self {
+            id: Self::fresh_id(),
             relations,
             views,
             view_counter: self.view_counter,
@@ -367,6 +451,15 @@ mod tests {
     use super::*;
     use crate::expression::{Join, Project, Select};
 
+    impl Database {
+        fn view_ref(&self, index: u32) -> ViewRef {
+            ViewRef {
+                owner: self.id,
+                index,
+            }
+        }
+    }
+
     #[test]
     fn test_insert() {
         {
@@ -374,7 +467,7 @@ mod tests {
             let r = database.add_relation::<i32>("r").unwrap();
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
             assert_eq!(
-                Tuples::<i32>::from(vec![1, 2, 3]),
+                Batch::from_set(&Tuples::<i32>::from(vec![1, 2, 3]), 1),
                 database.relation_instance(&r).unwrap().to_add()[0]
             );
         }
@@ -384,11 +477,11 @@ mod tests {
             assert!(database.insert(&r, vec![1, 2, 3].into()).is_ok());
             assert!(database.insert(&r, vec![1, 4].into()).is_ok());
             assert_eq!(
-                Tuples::<i32>::from(vec![1, 2, 3]),
+                Batch::from_set(&Tuples::<i32>::from(vec![1, 2, 3]), 1),
                 database.relation_instance(&r).unwrap().to_add()[0]
             );
             assert_eq!(
-                Tuples::<i32>::from(vec![1, 4]),
+                Batch::from_set(&Tuples::<i32>::from(vec![1, 4]), 1),
                 database.relation_instance(&r).unwrap().to_add()[1]
             );
         }
@@ -445,8 +538,8 @@ mod tests {
         let mut database = Database::new();
         assert!(database.add_relation::<i32>("a").is_ok());
         assert!(database.add_relation::<i32>("a").is_err()); // duplicate
-        assert!(database.relations.get("a").is_some());
-        assert!(database.relations.get("b").is_none());
+        assert!(database.relations.contains_key("a"));
+        assert!(!database.relations.contains_key("b"));
     }
 
     #[test]
@@ -466,15 +559,15 @@ mod tests {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
             database.store_view(a.clone()).unwrap();
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
         {
             let mut database = Database::new();
             let _ = database.add_relation::<i32>("a").unwrap();
             database.store_view(Relation::<i32>::new("a")).unwrap();
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
         {
             let mut database = Database::new();
@@ -486,8 +579,8 @@ mod tests {
             let a = database.add_relation::<i32>("a").unwrap();
             database.store_view(Select::new(a, |&t| t != 0)).unwrap();
 
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
 
         {
@@ -495,8 +588,8 @@ mod tests {
             let a = database.add_relation::<i32>("a").unwrap();
             database.store_view(Project::new(a, |t| t + 1)).unwrap();
 
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
 
         {
@@ -507,8 +600,8 @@ mod tests {
                 .store_view(Join::new(a, b, |t| t.0, |t| t.0, |_, &l, &r| (l, r)))
                 .unwrap();
 
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
 
         {
@@ -517,9 +610,9 @@ mod tests {
             let view = database.store_view(a).unwrap();
 
             database.store_view(view).unwrap();
-            assert!(database.views.get(&ViewRef(0)).is_some());
-            assert!(database.views.get(&ViewRef(1)).is_some());
-            assert!(database.views.get(&ViewRef(1000)).is_none());
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(database.views.contains_key(&database.view_ref(1)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
     }
 

@@ -1,27 +1,30 @@
+use super::instance::Batch;
 use crate::{
     expression::{view::ViewRef, *},
-    Error, Tuple, Tuples,
+    Error, Tuple,
 };
+use std::rc::Rc;
 
 /// Extends [`Expression`] with methods required for incremental database update.
 pub trait ExpressionExt<T: Tuple>: Expression<T> {
-    /// Visits this node by a [`RecentCollector`] and returns the recent tuples of the
+    /// Visits this node by a [`RecentCollector`] and returns the recent changes of the
     /// database according to the logic implemented by `collector`.
     ///
     /// **Note**:
-    /// Recent tuples are those tuples that got inserted into relation instances of a
-    /// database before any dependent (materialized) views are updated.
-    fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    /// Recent changes are the weighted tuples (positive for insertions, negative for
+    /// retractions) applied to instances of a database before any dependent
+    /// (materialized) views are updated.
+    fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
     where
         C: RecentCollector;
 
-    /// Visits this node by a [`StableCollector`] and returns the stable tuples of the
+    /// Visits this node by a [`StableCollector`] and returns the stable batches of the
     /// database according to the logic implemented by `collector`.
     ///
     /// **Note**:
-    /// Stable tuples are those tuples that have already been reflected in (materialized)
-    /// views that are affected by those tuples.
-    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    /// Stable batches hold the weighted changes that have already been reflected in the
+    /// (materialized) views they affect; their consolidated sum is the current content.
+    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         C: StableCollector;
 
@@ -39,14 +42,14 @@ where
     T: Tuple,
     E: ExpressionExt<T>,
 {
-    fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
     where
         C: RecentCollector,
     {
         (*self).collect_recent(collector)
     }
 
-    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         C: StableCollector,
     {
@@ -67,14 +70,14 @@ where
     T: Tuple,
     E: ExpressionExt<T>,
 {
-    fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+    fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
     where
         C: RecentCollector,
     {
         (**self).collect_recent(collector)
     }
 
-    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         C: StableCollector,
     {
@@ -94,43 +97,40 @@ where
 /// a database when the visited expression is evaluated.
 pub trait RecentCollector {
     /// Collects the recent tuples for the [`Full`] expression.
-    fn collect_full<T>(&self, full: &Full<T>) -> Result<Tuples<T>, Error>
+    fn collect_full<T>(&self, full: &Full<T>) -> Result<Batch<T>, Error>
     where
         T: Tuple;
 
     /// Collects the recent tuples for the [`Empty`] expression.
-    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Tuples<T>, Error>
+    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Batch<T>, Error>
     where
         T: Tuple;
 
     /// Collects the recent tuples for a [`Singleton`] expression.
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Tuples<T>, Error>
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Batch<T>, Error>
     where
         T: Tuple;
 
     /// Collects the recent tuples for a [`Relation`] expression.
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Tuples<T>, Error>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Batch<T>, Error>
     where
         T: Tuple + 'static;
 
     /// Collects the recent tuples for a [`Select`] expression.
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Tuples<T>, Error>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Batch<T>, Error>
     where
         T: Tuple,
         E: ExpressionExt<T>;
 
     /// Collects the recent tuples for a [`Union`] expression.    
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Tuples<T>, Error>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Batch<T>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
     /// Collects the recent tuples for an [`Intersect`] expression.    
-    fn collect_intersect<T, L, R>(
-        &self,
-        intersect: &Intersect<T, L, R>,
-    ) -> Result<Tuples<T>, Error>
+    fn collect_intersect<T, L, R>(&self, intersect: &Intersect<T, L, R>) -> Result<Batch<T>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
@@ -140,14 +140,20 @@ pub trait RecentCollector {
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
-    ) -> Result<Tuples<T>, Error>
+    ) -> Result<Batch<T>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
+    /// Collects the recent tuples for a [`Distinct`] expression.
+    fn collect_distinct<T, E>(&self, distinct: &Distinct<T, E>) -> Result<Batch<T>, Error>
+    where
+        T: Tuple,
+        E: ExpressionExt<T>;
+
     /// Collects the recent tuples for a [`Project`] expression.    
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Tuples<T>, Error>
+    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Batch<T>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -157,7 +163,7 @@ pub trait RecentCollector {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>, Error>
+    ) -> Result<Batch<T>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -169,7 +175,7 @@ pub trait RecentCollector {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Tuples<T>, Error>
+    ) -> Result<Batch<T>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -179,7 +185,7 @@ pub trait RecentCollector {
         Right: ExpressionExt<R>;
 
     /// Collects the recent tuples for a [`View`] expression.
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Tuples<T>, Error>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Batch<T>, Error>
     where
         T: Tuple + 'static,
         E: ExpressionExt<T> + 'static;
@@ -189,33 +195,33 @@ pub trait RecentCollector {
 /// a database when the visited expression is evaluated.
 pub trait StableCollector {
     /// Collects the stable tuples for the [`Full`] expression.    
-    fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_full<T>(&self, full: &Full<T>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple;
 
     /// Collects the stable tuples for the [`Empty`] expression.        
-    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_empty<T>(&self, empty: &Empty<T>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple;
 
     /// Collects the stable tuples for a [`Singleton`] expression.        
-    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_singleton<T>(&self, singleton: &Singleton<T>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple;
 
     /// Collects the stable tuples for a [`Relation`] expression.            
-    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_relation<T>(&self, relation: &Relation<T>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple + 'static;
 
     /// Collects the stable tuples for a [`Select`] expression.            
-    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_select<T, E>(&self, select: &Select<T, E>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple,
         E: ExpressionExt<T>;
 
     /// Collects the stable tuples for a [`Union`] expression.            
-    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_union<T, L, R>(&self, union: &Union<T, L, R>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
@@ -225,7 +231,7 @@ pub trait StableCollector {
     fn collect_intersect<T, L, R>(
         &self,
         intersect: &Intersect<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>, Error>
+    ) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
@@ -235,14 +241,23 @@ pub trait StableCollector {
     fn collect_difference<T, L, R>(
         &self,
         difference: &Difference<T, L, R>,
-    ) -> Result<Vec<Tuples<T>>, Error>
+    ) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple,
         L: ExpressionExt<T>,
         R: ExpressionExt<T>;
 
+    /// Collects the stable tuples for a [`Distinct`] expression.
+    fn collect_distinct<T, E>(&self, distinct: &Distinct<T, E>) -> Result<Vec<Rc<Batch<T>>>, Error>
+    where
+        T: Tuple,
+        E: ExpressionExt<T>;
+
     /// Collects the stable tuples for a [`Project`] expression.            
-    fn collect_project<S, T, E>(&self, project: &Project<S, T, E>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_project<S, T, E>(
+        &self,
+        project: &Project<S, T, E>,
+    ) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple,
         S: Tuple,
@@ -252,7 +267,7 @@ pub trait StableCollector {
     fn collect_product<L, R, Left, Right, T>(
         &self,
         product: &Product<L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>, Error>
+    ) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         L: Tuple,
         R: Tuple,
@@ -264,7 +279,7 @@ pub trait StableCollector {
     fn collect_join<K, L, R, Left, Right, T>(
         &self,
         join: &Join<K, L, R, Left, Right, T>,
-    ) -> Result<Vec<Tuples<T>>, Error>
+    ) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         K: Tuple,
         L: Tuple,
@@ -274,36 +289,37 @@ pub trait StableCollector {
         Right: ExpressionExt<R>;
 
     /// Collects the stable tuples for a [`View`] expression.            
-    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Tuples<T>>, Error>
+    fn collect_view<T, E>(&self, view: &View<T, E>) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         T: Tuple + 'static,
         E: ExpressionExt<T> + 'static;
 }
 
 mod r#impl {
-    use super::{ExpressionExt, RecentCollector, StableCollector};
+    use super::{Batch, ExpressionExt, RecentCollector, StableCollector};
     use crate::{
         expression::view::{View, ViewRef},
-        Error, Tuple, Tuples,
+        Error, Tuple,
     };
+    use std::rc::Rc;
 
     impl<T, E> ExpressionExt<T> for View<T, E>
     where
         T: Tuple + 'static,
         E: ExpressionExt<T> + 'static,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_view(&self)
+            collector.collect_view(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_view(&self)
+            collector.collect_view(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -323,18 +339,18 @@ mod r#impl {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_intersect(&self)
+            collector.collect_intersect(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_intersect(&self)
+            collector.collect_intersect(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -354,18 +370,18 @@ mod r#impl {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_union(&self)
+            collector.collect_union(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_union(&self)
+            collector.collect_union(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -385,18 +401,48 @@ mod r#impl {
         L: ExpressionExt<T>,
         R: ExpressionExt<T>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_difference(&self)
+            collector.collect_difference(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_difference(&self)
+            collector.collect_difference(self)
+        }
+
+        fn relation_dependencies(&self) -> &[String] {
+            self.relation_deps()
+        }
+
+        fn view_dependencies(&self) -> &[ViewRef] {
+            self.view_deps()
+        }
+    }
+
+    use crate::expression::Distinct;
+
+    impl<T, E> ExpressionExt<T> for Distinct<T, E>
+    where
+        T: Tuple,
+        E: ExpressionExt<T>,
+    {
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
+        where
+            C: RecentCollector,
+        {
+            collector.collect_distinct(self)
+        }
+
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
+        where
+            C: StableCollector,
+        {
+            collector.collect_distinct(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -414,18 +460,18 @@ mod r#impl {
     where
         T: Tuple,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_empty(&self)
+            collector.collect_empty(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_empty(&self)
+            collector.collect_empty(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -443,18 +489,18 @@ mod r#impl {
     where
         T: Tuple,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_full(&self)
+            collector.collect_full(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_full(&self)
+            collector.collect_full(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -477,18 +523,18 @@ mod r#impl {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_join(&self)
+            collector.collect_join(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_join(&self)
+            collector.collect_join(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -503,7 +549,7 @@ mod r#impl {
     use crate::expression::Mono;
 
     impl<T: Tuple + 'static> ExpressionExt<T> for Mono<T> {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
@@ -517,12 +563,13 @@ mod r#impl {
                 Mono::Union(exp) => exp.collect_recent(collector),
                 Mono::Intersect(exp) => exp.collect_recent(collector),
                 Mono::Difference(exp) => exp.collect_recent(collector),
+                Mono::Distinct(exp) => exp.collect_recent(collector),
                 Mono::Product(exp) => exp.collect_recent(collector),
                 Mono::Join(exp) => exp.collect_recent(collector),
                 Mono::View(exp) => exp.collect_recent(collector),
             }
         }
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
@@ -536,6 +583,7 @@ mod r#impl {
                 Mono::Union(exp) => exp.collect_stable(collector),
                 Mono::Intersect(exp) => exp.collect_stable(collector),
                 Mono::Difference(exp) => exp.collect_stable(collector),
+                Mono::Distinct(exp) => exp.collect_stable(collector),
                 Mono::Product(exp) => exp.collect_stable(collector),
                 Mono::Join(exp) => exp.collect_stable(collector),
                 Mono::View(exp) => exp.collect_stable(collector),
@@ -553,6 +601,7 @@ mod r#impl {
                 Mono::Union(exp) => exp.relation_dependencies(),
                 Mono::Intersect(exp) => exp.relation_dependencies(),
                 Mono::Difference(exp) => exp.relation_dependencies(),
+                Mono::Distinct(exp) => exp.relation_dependencies(),
                 Mono::Product(exp) => exp.relation_dependencies(),
                 Mono::Join(exp) => exp.relation_dependencies(),
                 Mono::View(exp) => exp.relation_dependencies(),
@@ -570,6 +619,7 @@ mod r#impl {
                 Mono::Union(exp) => exp.view_dependencies(),
                 Mono::Intersect(exp) => exp.view_dependencies(),
                 Mono::Difference(exp) => exp.view_dependencies(),
+                Mono::Distinct(exp) => exp.view_dependencies(),
                 Mono::Product(exp) => exp.view_dependencies(),
                 Mono::Join(exp) => exp.view_dependencies(),
                 Mono::View(exp) => exp.view_dependencies(),
@@ -587,18 +637,18 @@ mod r#impl {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_product(&self)
+            collector.collect_product(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_product(&self)
+            collector.collect_product(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -618,18 +668,18 @@ mod r#impl {
         T: Tuple,
         E: ExpressionExt<S>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_project(&self)
+            collector.collect_project(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_project(&self)
+            collector.collect_project(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -647,18 +697,18 @@ mod r#impl {
     where
         T: Tuple + 'static,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_relation(&self)
+            collector.collect_relation(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_relation(&self)
+            collector.collect_relation(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -677,18 +727,18 @@ mod r#impl {
         T: Tuple,
         E: ExpressionExt<T>,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_select(&self)
+            collector.collect_select(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_select(&self)
+            collector.collect_select(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
@@ -706,18 +756,18 @@ mod r#impl {
     where
         T: Tuple,
     {
-        fn collect_recent<C>(&self, collector: &C) -> Result<crate::Tuples<T>, Error>
+        fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
         where
             C: RecentCollector,
         {
-            collector.collect_singleton(&self)
+            collector.collect_singleton(self)
         }
 
-        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<crate::Tuples<T>>, Error>
+        fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
         where
             C: StableCollector,
         {
-            collector.collect_singleton(&self)
+            collector.collect_singleton(self)
         }
 
         fn relation_dependencies(&self) -> &[String] {
