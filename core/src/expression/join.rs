@@ -1,14 +1,10 @@
 use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
-use std::{
-    cell::{RefCell, RefMut},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{marker::PhantomData, rc::Rc};
 
 /// Is the type of [`Join`] mapping closures for constructing tuples of type `T` from a key
 /// of type `K`, a left tuple of type `L`, and a right tuple of type `R`.
-type Mapper<K, L, R, T> = dyn FnMut(&K, &L, &R) -> T;
+type Mapper<K, L, R, T> = dyn Fn(&K, &L, &R) -> T;
 
 /// Represents the join of its `left` and `right` sub-expressions.
 ///
@@ -50,9 +46,9 @@ where
 {
     left: Left,
     right: Right,
-    left_key: Rc<RefCell<dyn FnMut(&L) -> K>>,
-    right_key: Rc<RefCell<dyn FnMut(&R) -> K>>,
-    mapper: Rc<RefCell<Mapper<K, L, R, T>>>,
+    left_key: Rc<dyn Fn(&L) -> K>,
+    right_key: Rc<dyn Fn(&R) -> K>,
+    mapper: Rc<Mapper<K, L, R, T>>,
     relation_deps: Vec<String>,
     view_deps: Vec<ViewRef>,
 }
@@ -74,9 +70,9 @@ where
     pub fn new<IL, IR>(
         left: IL,
         right: IR,
-        left_key: impl FnMut(&L) -> K + 'static,
-        right_key: impl FnMut(&R) -> K + 'static,
-        mapper: impl FnMut(&K, &L, &R) -> T + 'static,
+        left_key: impl Fn(&L) -> K + 'static,
+        right_key: impl Fn(&R) -> K + 'static,
+        mapper: impl Fn(&K, &L, &R) -> T + 'static,
     ) -> Self
     where
         IL: IntoExpression<L, Left>,
@@ -86,17 +82,14 @@ where
         let left = left.into_expression();
         let right = right.into_expression();
 
-        let mut deps = dependency::DependencyVisitor::new();
-        left.visit(&mut deps);
-        right.visit(&mut deps);
-        let (relation_deps, view_deps) = deps.into_dependencies();
+        let (relation_deps, view_deps) = dependency::binary_dependencies(&left, &right);
 
         Self {
             left,
             right,
-            left_key: Rc::new(RefCell::new(left_key)),
-            right_key: Rc::new(RefCell::new(right_key)),
-            mapper: Rc::new(RefCell::new(mapper)),
+            left_key: Rc::new(left_key),
+            right_key: Rc::new(right_key),
+            mapper: Rc::new(mapper),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
         }
@@ -114,24 +107,22 @@ where
         &self.right
     }
 
-    /// Returns a mutable reference (of type [`RefMut`]) of the key closure for
-    /// the left sub-expression.
+    /// Returns the key closure for the left sub-expression.
     #[inline(always)]
-    pub(crate) fn left_key_mut(&self) -> RefMut<dyn FnMut(&L) -> K> {
-        self.left_key.borrow_mut()
+    pub(crate) fn left_key(&self) -> &dyn Fn(&L) -> K {
+        &*self.left_key
     }
 
-    /// Returns a mutable reference (of type [`RefMut`]) of the key closure for
-    /// the right sub-expression.
+    /// Returns the key closure for the right sub-expression.
     #[inline(always)]
-    pub(crate) fn right_key_mut(&self) -> RefMut<dyn FnMut(&R) -> K> {
-        self.right_key.borrow_mut()
+    pub(crate) fn right_key(&self) -> &dyn Fn(&R) -> K {
+        &*self.right_key
     }
 
-    /// Returns a mutable reference (of type [`RefMut`]) to the joining closure.
+    /// Returns the joining closure.
     #[inline(always)]
-    pub(crate) fn mapper_mut(&self) -> RefMut<dyn FnMut(&K, &L, &R) -> T> {
-        self.mapper.borrow_mut()
+    pub(crate) fn mapper(&self) -> &dyn Fn(&K, &L, &R) -> T {
+        &*self.mapper
     }
 
     /// Returns a reference to the relation dependencies of the receiver.
@@ -160,12 +151,13 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_join(&self);
+        visitor.visit_join(self);
     }
 }
 
 // A hack for debugging purposes:
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<L, R, Left, Right>
 where
     L: Tuple,

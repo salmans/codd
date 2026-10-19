@@ -2,9 +2,13 @@ use super::{Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
-/// Is the type of the view identifiers in a database.
+/// Identifies a view by the database that stored it and its position among that
+/// database's views, so a handle never resolves to a different view in a clone.
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
-pub struct ViewRef(pub(crate) i32);
+pub struct ViewRef {
+    pub(crate) owner: u64,
+    pub(crate) index: u32,
+}
 
 /// Represents a view in the database.
 ///
@@ -41,8 +45,13 @@ pub struct ViewRef(pub(crate) i32);
 /// );
 ///
 /// use codd::expression::Difference;
-/// // incremental view update for `Difference` is currently not supported:
-/// assert!(db.store_view(Difference::new(dividends, divisors)).is_err());
+/// // views over `Difference` are maintained incrementally too, including retractions:
+/// let not_divisors = db.store_view(Difference::new(dividends.clone(), divisors.clone())).unwrap();
+/// assert_eq!(vec![6, 12, 18, 24, 30], db.evaluate(&not_divisors).unwrap().into_tuples());
+/// db.insert(&divisors, vec![12].into()).unwrap();
+/// assert_eq!(vec![6, 18, 24, 30], db.evaluate(&not_divisors).unwrap().into_tuples());
+/// db.retract(&divisors, vec![12].into()).unwrap();
+/// assert_eq!(vec![6, 12, 18, 24, 30], db.evaluate(&not_divisors).unwrap().into_tuples());
 /// ```
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct View<T, E>
@@ -91,7 +100,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_view(&self);
+        visitor.visit_view(self);
     }
 }
 

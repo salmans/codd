@@ -1,10 +1,6 @@
 use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
-use std::{
-    cell::{RefCell, RefMut},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{marker::PhantomData, rc::Rc};
 
 /// Selects tuples of the underlying sub-expression according to a given predicate.
 ///
@@ -31,7 +27,7 @@ where
     E: Expression<T>,
 {
     expression: E,
-    predicate: Rc<RefCell<dyn FnMut(&T) -> bool>>,
+    predicate: Rc<dyn Fn(&T) -> bool>,
     relation_deps: Vec<String>,
     view_deps: Vec<ViewRef>,
 }
@@ -45,18 +41,16 @@ where
     pub fn new<I, P>(expression: I, predicate: P) -> Self
     where
         I: IntoExpression<T, E>,
-        P: FnMut(&T) -> bool + 'static,
+        P: Fn(&T) -> bool + 'static,
     {
         use super::dependency;
         let expression = expression.into_expression();
 
-        let mut deps = dependency::DependencyVisitor::new();
-        expression.visit(&mut deps);
-        let (relation_deps, view_deps) = deps.into_dependencies();
+        let (relation_deps, view_deps) = dependency::expression_dependencies(&expression);
 
         Self {
             expression,
-            predicate: Rc::new(RefCell::new(predicate)),
+            predicate: Rc::new(predicate),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
         }
@@ -68,10 +62,10 @@ where
         &self.expression
     }
 
-    /// Returns a mutable reference (of type [`RefMut`]) to the select predicate.
+    /// Returns the select predicate.
     #[inline(always)]
-    pub(crate) fn predicate_mut(&self) -> RefMut<dyn FnMut(&T) -> bool> {
-        self.predicate.borrow_mut()
+    pub(crate) fn predicate(&self) -> &dyn Fn(&T) -> bool {
+        &*self.predicate
     }
 
     /// Returns a reference to the relation dependencies of the receiver.
@@ -96,11 +90,12 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_select(&self);
+        visitor.visit_select(self);
     }
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // fields exist only for the derived `Debug` output
 struct Debuggable<T, E>
 where
     T: Tuple,

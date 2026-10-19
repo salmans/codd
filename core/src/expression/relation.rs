@@ -64,7 +64,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_relation(&self);
+        visitor.visit_relation(self);
     }
 }
 
