@@ -49,10 +49,7 @@ where
         let left = left.into_expression();
         let right = right.into_expression();
 
-        let mut deps = dependency::DependencyVisitor::new();
-        left.visit(&mut deps);
-        right.visit(&mut deps);
-        let (relation_deps, view_deps) = deps.into_dependencies();
+        let (relation_deps, view_deps) = dependency::binary_dependencies(&left, &right);
 
         Self {
             left,

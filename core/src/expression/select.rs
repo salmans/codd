@@ -46,9 +46,7 @@ where
         use super::dependency;
         let expression = expression.into_expression();
 
-        let mut deps = dependency::DependencyVisitor::new();
-        expression.visit(&mut deps);
-        let (relation_deps, view_deps) = deps.into_dependencies();
+        let (relation_deps, view_deps) = dependency::expression_dependencies(&expression);
 
         Self {
             expression,
