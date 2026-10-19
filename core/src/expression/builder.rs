@@ -43,6 +43,14 @@ where
         }
     }
 
+    /// Builds a [`Distinct`] expression over the receiver's expression.
+    pub fn distinct(self) -> Builder<L, Distinct<L, Left>> {
+        Builder {
+            expression: Distinct::new(self.expression),
+            _marker: PhantomData,
+        }
+    }
+
     /// Builds a [`Select`] expression over the receiver's expression.
     ///
     /// **Example**:
@@ -58,13 +66,6 @@ where
     ///
     /// assert_eq!(vec!["Apple", "BANANA"], db.evaluate(&select).unwrap().into_tuples());
     /// ```
-    pub fn distinct(self) -> Builder<L, Distinct<L, Left>> {
-        Builder {
-            expression: Distinct::new(self.expression),
-            _marker: PhantomData,
-        }
-    }
-
     pub fn select(self, f: impl Fn(&L) -> bool + 'static) -> Builder<L, Select<L, Left>> {
         Builder {
             expression: Select::new(self.expression, f),

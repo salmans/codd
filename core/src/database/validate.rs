@@ -4,7 +4,7 @@ use crate::{
 };
 
 /// Is a [`Visitor`] that validates if an expression can be turned into a [`View`].
-/// Currently, expressions containing `Difference` are not supported.
+/// Expressions containing `Full` cannot be materialized and are rejected.
 pub(crate) struct ViewExpressionValidator(Option<Error>);
 
 impl ViewExpressionValidator {

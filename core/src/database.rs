@@ -272,7 +272,7 @@ impl Database {
         I: IntoExpression<T, E>,
     {
         let expression = expression.into_expression();
-        // `validator` rejects expressions that cannot be materialized (`Difference`, `Full`):
+        // rejects expressions that cannot be materialized (`Full`):
         validate::validate_view_expression(&expression)?;
 
         let (relation_deps, view_deps) = dependency::expression_dependencies(&expression);

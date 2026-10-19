@@ -7,22 +7,23 @@ use std::rc::Rc;
 
 /// Extends [`Expression`] with methods required for incremental database update.
 pub trait ExpressionExt<T: Tuple>: Expression<T> {
-    /// Visits this node by a [`RecentCollector`] and returns the recent tuples of the
+    /// Visits this node by a [`RecentCollector`] and returns the recent changes of the
     /// database according to the logic implemented by `collector`.
     ///
     /// **Note**:
-    /// Recent tuples are those tuples that got inserted into relation instances of a
-    /// database before any dependent (materialized) views are updated.
+    /// Recent changes are the weighted tuples (positive for insertions, negative for
+    /// retractions) applied to instances of a database before any dependent
+    /// (materialized) views are updated.
     fn collect_recent<C>(&self, collector: &C) -> Result<Batch<T>, Error>
     where
         C: RecentCollector;
 
-    /// Visits this node by a [`StableCollector`] and returns the stable tuples of the
+    /// Visits this node by a [`StableCollector`] and returns the stable batches of the
     /// database according to the logic implemented by `collector`.
     ///
     /// **Note**:
-    /// Stable tuples are those tuples that have already been reflected in (materialized)
-    /// views that are affected by those tuples.
+    /// Stable batches hold the weighted changes that have already been reflected in the
+    /// (materialized) views they affect; their consolidated sum is the current content.
     fn collect_stable<C>(&self, collector: &C) -> Result<Vec<Rc<Batch<T>>>, Error>
     where
         C: StableCollector;
