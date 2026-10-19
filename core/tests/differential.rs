@@ -14,7 +14,7 @@ use codd::{
         Difference, Distinct, Empty, Intersect, Join, Mono, Product, Project, Relation, Select,
         Singleton, Union, View,
     },
-    Database,
+    Database, Error,
 };
 use proptest::prelude::*;
 use std::collections::BTreeSet;
@@ -57,13 +57,23 @@ enum Q {
 struct Shadow {
     arities: Vec<usize>,
     rels: Vec<BTreeSet<Row>>,
-    views: Vec<(View<Row, Expr>, Q, usize)>,
+    views: Vec<StoredView>,
+}
+
+/// A view stored in one state, shared with the states forked from it afterwards.
+#[derive(Clone)]
+struct StoredView {
+    handle: View<Row, Expr>,
+    query: Q,
+    arity: usize,
+    /// Unique across all states of a program, so forked copies can be recognized.
+    serial: usize,
 }
 
 fn arity(q: &Q, s: &Shadow) -> usize {
     match q {
         Q::Rel(i) => s.arities[*i],
-        Q::View(i) => s.views[*i].2,
+        Q::View(i) => s.views[*i].arity,
         Q::Empty(a) => *a,
         Q::Singleton(r) => r.len(),
         Q::Select { e, .. } | Q::Distinct(e) => arity(e, s),
@@ -84,7 +94,7 @@ fn key(t: &Row, cols: &[usize]) -> Row {
 fn reference(q: &Q, s: &Shadow) -> BTreeSet<Row> {
     match q {
         Q::Rel(i) => s.rels[*i].clone(),
-        Q::View(i) => reference(&s.views[*i].1, s),
+        Q::View(i) => reference(&s.views[*i].query, s),
         Q::Empty(_) => BTreeSet::new(),
         Q::Singleton(r) => std::iter::once(r.clone()).collect(),
         Q::Select { e, col, val } => reference(e, s)
@@ -118,7 +128,7 @@ fn reference(q: &Q, s: &Shadow) -> BTreeSet<Row> {
 fn build(q: &Q, s: &Shadow) -> Expr {
     match q {
         Q::Rel(i) => Relation::new(rel_name(*i)).into(),
-        Q::View(i) => s.views[*i].0.clone().into(),
+        Q::View(i) => s.views[*i].handle.clone().into(),
         Q::Empty(_) => Empty::new().into(),
         Q::Singleton(r) => Singleton::new(r.clone()).into(),
         Q::Select { e, col, val } => {
@@ -289,6 +299,25 @@ fn check(db: &Database, s: &Shadow, q: &Q, trace: &[String]) -> usize {
     got.len()
 }
 
+/// Evaluates a view handle issued by another state: it must resolve only if the view was
+/// stored before `state` forked from that other state, and then agree with `state`'s data.
+fn check_foreign(state: &(Database, Shadow), view: &StoredView, trace: &[String]) {
+    let (db, s) = state;
+    match s.views.iter().position(|v| v.serial == view.serial) {
+        Some(i) => {
+            check(db, s, &Q::View(i), trace);
+        }
+        None => assert!(
+            matches!(
+                db.evaluate(&view.handle),
+                Err(Error::InstanceNotFound { .. })
+            ),
+            "a view stored after the fork resolved in another state\ntrace: {:#?}",
+            trace
+        ),
+    }
+}
+
 /// Counts of what a program exercised, used to make sure the generator is
 /// not degenerate.
 #[derive(Default, Debug, Clone, Copy)]
@@ -298,6 +327,7 @@ struct Stats {
     views: usize,
     checks: usize,
     forks: usize,
+    foreign_handles: usize,
     max_rows: usize,
     max_result: usize,
 }
@@ -360,7 +390,12 @@ fn run(data: &[u8]) -> Stats {
                 let view = db
                     .store_view(build(&q, s))
                     .unwrap_or_else(|e| panic!("store_view failed: {:?}\ntrace: {:#?}", e, trace));
-                s.views.push((view, q, a));
+                s.views.push(StoredView {
+                    handle: view,
+                    query: q,
+                    arity: a,
+                    serial: stats.views,
+                });
                 stats.views += 1;
             }
             4 | 5 => {
@@ -377,6 +412,14 @@ fn run(data: &[u8]) -> Stats {
                     let cloned = (db.clone(), s.clone());
                     states.push(cloned);
                     stats.forks += 1;
+                } else {
+                    let j = (k + 1 + b.pick(states.len() - 1)) % states.len();
+                    if !states[j].1.views.is_empty() {
+                        let i = b.pick(states[j].1.views.len());
+                        trace.push(format!("db{}: evaluate view {} of db{}", k, i, j));
+                        check_foreign(&states[k], &states[j].1.views[i], &trace);
+                        stats.foreign_handles += 1;
+                    }
                 }
             }
             _ => {
@@ -421,11 +464,18 @@ fn generator_is_not_degenerate() {
         total.views += st.views;
         total.checks += st.checks;
         total.forks += st.forks;
+        total.foreign_handles += st.foreign_handles;
         total.max_rows = total.max_rows.max(st.max_rows);
         total.max_result = total.max_result.max(st.max_result);
     }
     eprintln!("harness totals over 500 programs: {:?}", total);
-    assert!(total.views > 500 && total.checks > 1000 && total.forks > 100 && total.retracts > 300);
+    assert!(
+        total.views > 500
+            && total.checks > 1000
+            && total.forks > 100
+            && total.foreign_handles > 100
+            && total.retracts > 300
+    );
 }
 
 proptest! {

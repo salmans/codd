@@ -2,9 +2,13 @@ use super::{Expression, Visitor};
 use crate::Tuple;
 use std::marker::PhantomData;
 
-/// Is the type of the view identifiers in a database.
+/// Identifies a view by the database that stored it and its position among that
+/// database's views, so a handle never resolves to a different view in a clone.
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
-pub struct ViewRef(pub(crate) i32);
+pub struct ViewRef {
+    pub(crate) owner: u64,
+    pub(crate) index: u32,
+}
 
 /// Represents a view in the database.
 ///

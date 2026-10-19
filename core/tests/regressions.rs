@@ -135,3 +135,41 @@ fn clones_are_independent_including_views_stored_after_cloning() {
     // `db` never stored that view, so its handle is unknown there.
     assert!(db.evaluate(&big).is_err());
 }
+
+/// A clone gets its own view references: a view stored in one clone after the fork is
+/// unknown to the other instead of resolving to the other's same-numbered view, while a
+/// view stored before the fork stays valid in both.
+#[test]
+fn view_handles_identify_the_database_that_stored_them() {
+    let mut original = Database::new();
+    let r = original.add_relation::<u32>("r").unwrap();
+    original.insert(&r, vec![1, 2, 3, 4].into()).unwrap();
+    let all = original.store_view(r.clone()).unwrap();
+
+    let mut clone = original.clone();
+    let even = clone
+        .store_view(Select::new(r.clone(), |t: &u32| t.is_multiple_of(2)))
+        .unwrap();
+    let odd = original
+        .store_view(Select::new(r.clone(), |t: &u32| t % 2 == 1))
+        .unwrap();
+
+    assert_eq!(vec![2, 4], clone.evaluate(&even).unwrap().into_tuples());
+    assert_eq!(vec![1, 3], original.evaluate(&odd).unwrap().into_tuples());
+    assert!(matches!(
+        original.evaluate(&even),
+        Err(Error::InstanceNotFound { .. })
+    ));
+    assert!(matches!(
+        clone.evaluate(&odd),
+        Err(Error::InstanceNotFound { .. })
+    ));
+    assert_eq!(
+        vec![1, 2, 3, 4],
+        original.evaluate(&all).unwrap().into_tuples()
+    );
+    assert_eq!(
+        vec![1, 2, 3, 4],
+        clone.evaluate(&all).unwrap().into_tuples()
+    );
+}

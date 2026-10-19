@@ -18,6 +18,7 @@ pub use instance::Tuples;
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use instance::{consolidate, Batch, DynInstance, Instance};
@@ -160,15 +161,26 @@ impl Clone for ViewEntry {
 /// assert_eq!(vec![15, 23, 101, 1001], odds_data.into_tuples());
 /// ```
 pub struct Database {
+    /// Distinguishes this database from every other one in the process, clones included,
+    /// so that views it stores get references no other database issues.
+    id: u64,
     relations: HashMap<String, RelationEntry>,
     views: HashMap<ViewRef, ViewEntry>,
-    view_counter: i32,
+    view_counter: u32,
 }
 
+/// Issues database ids, deterministically in creation order.
+static NEXT_DATABASE_ID: AtomicU64 = AtomicU64::new(0);
+
 impl Database {
+    fn fresh_id() -> u64 {
+        NEXT_DATABASE_ID.fetch_add(1, Ordering::Relaxed)
+    }
+
     /// Creates a new empty database.
     pub fn new() -> Self {
         Self {
+            id: Self::fresh_id(),
             relations: HashMap::new(),
             views: HashMap::new(),
             view_counter: 0,
@@ -281,7 +293,10 @@ impl Database {
         }
 
         let mut entry = ViewEntry::new(ViewInstance::new(expression));
-        let reference = ViewRef(self.view_counter);
+        let reference = ViewRef {
+            owner: self.id,
+            index: self.view_counter,
+        };
 
         // Initialize the view from the stable tuples of its dependencies. This may still
         // fail (for example on a tuple type mismatch); nothing has been registered yet.
@@ -423,6 +438,7 @@ impl Clone for Database {
         });
 
         Self {
+            id: Self::fresh_id(),
             relations,
             views,
             view_counter: self.view_counter,
@@ -434,6 +450,15 @@ impl Clone for Database {
 mod tests {
     use super::*;
     use crate::expression::{Join, Project, Select};
+
+    impl Database {
+        fn view_ref(&self, index: u32) -> ViewRef {
+            ViewRef {
+                owner: self.id,
+                index,
+            }
+        }
+    }
 
     #[test]
     fn test_insert() {
@@ -534,15 +559,15 @@ mod tests {
             let mut database = Database::new();
             let a = database.add_relation::<i32>("a").unwrap();
             database.store_view(a.clone()).unwrap();
-            assert!(database.views.contains_key(&ViewRef(0)));
-            assert!(!database.views.contains_key(&ViewRef(1000)));
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
         {
             let mut database = Database::new();
             let _ = database.add_relation::<i32>("a").unwrap();
             database.store_view(Relation::<i32>::new("a")).unwrap();
-            assert!(database.views.contains_key(&ViewRef(0)));
-            assert!(!database.views.contains_key(&ViewRef(1000)));
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
         {
             let mut database = Database::new();
@@ -554,8 +579,8 @@ mod tests {
             let a = database.add_relation::<i32>("a").unwrap();
             database.store_view(Select::new(a, |&t| t != 0)).unwrap();
 
-            assert!(database.views.contains_key(&ViewRef(0)));
-            assert!(!database.views.contains_key(&ViewRef(1000)));
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
 
         {
@@ -563,8 +588,8 @@ mod tests {
             let a = database.add_relation::<i32>("a").unwrap();
             database.store_view(Project::new(a, |t| t + 1)).unwrap();
 
-            assert!(database.views.contains_key(&ViewRef(0)));
-            assert!(!database.views.contains_key(&ViewRef(1000)));
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
 
         {
@@ -575,8 +600,8 @@ mod tests {
                 .store_view(Join::new(a, b, |t| t.0, |t| t.0, |_, &l, &r| (l, r)))
                 .unwrap();
 
-            assert!(database.views.contains_key(&ViewRef(0)));
-            assert!(!database.views.contains_key(&ViewRef(1000)));
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
 
         {
@@ -585,9 +610,9 @@ mod tests {
             let view = database.store_view(a).unwrap();
 
             database.store_view(view).unwrap();
-            assert!(database.views.contains_key(&ViewRef(0)));
-            assert!(database.views.contains_key(&ViewRef(1)));
-            assert!(!database.views.contains_key(&ViewRef(1000)));
+            assert!(database.views.contains_key(&database.view_ref(0)));
+            assert!(database.views.contains_key(&database.view_ref(1)));
+            assert!(!database.views.contains_key(&database.view_ref(1000)));
         }
     }
 
