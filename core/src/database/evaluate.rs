@@ -40,7 +40,7 @@ fn unsupported(name: &str) -> Error {
 /// Keys a batch for joining: returns `(key, tuple, weight)` sorted by key.
 fn keyed<'a, K: Tuple, T: Tuple>(
     batch: &'a Batch<T>,
-    key: &dyn Fn(&T) -> K,
+    key: impl Fn(&T) -> K,
 ) -> Vec<(K, &'a T, isize)> {
     let mut result: Vec<(K, &T, isize)> =
         batch.items().iter().map(|(t, w)| (key(t), t, *w)).collect();
