@@ -40,7 +40,7 @@ fn unsupported(name: &str) -> Error {
 /// Keys a batch for joining: returns `(key, tuple, weight)` sorted by key.
 fn keyed<'a, K: Tuple, T: Tuple>(
     batch: &'a Batch<T>,
-    key: &mut dyn FnMut(&T) -> K,
+    key: &dyn Fn(&T) -> K,
 ) -> Vec<(K, &'a T, isize)> {
     let mut result: Vec<(K, &T, isize)> =
         batch.items().iter().map(|(t, w)| (key(t), t, *w)).collect();
@@ -85,7 +85,7 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         E: ExpressionExt<T>,
     {
         let recent = select.expression().collect_recent(self)?;
-        let mut predicate = select.predicate_mut();
+        let predicate = select.predicate();
         Ok(Batch::from_sorted(
             recent
                 .into_items()
@@ -203,7 +203,7 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         E: ExpressionExt<S>,
     {
         let recent = project.expression().collect_recent(self)?;
-        let mut mapper = project.mapper_mut();
+        let mapper = project.mapper();
         Ok(Batch::from_weighted(
             recent
                 .items()
@@ -230,7 +230,7 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
             return Ok(Batch::empty());
         }
 
-        let mut mapper = product.mapper_mut();
+        let mapper = product.mapper();
         let mut result = Vec::new();
         if !right_recent.is_empty() {
             for batch in product.left().collect_stable(self)?.iter() {
@@ -270,17 +270,17 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
             return Ok(Batch::empty());
         }
 
-        let mut left_key = join.left_key_mut();
-        let mut right_key = join.right_key_mut();
-        let mut mapper = join.mapper_mut();
+        let left_key = join.left_key();
+        let right_key = join.right_key();
+        let mapper = join.mapper();
 
-        let left_recent = keyed(&left_recent, &mut *left_key);
-        let right_recent = keyed(&right_recent, &mut *right_key);
+        let left_recent = keyed(&left_recent, left_key);
+        let right_recent = keyed(&right_recent, right_key);
 
         let mut result = Vec::new();
         if !right_recent.is_empty() {
             for batch in join.left().collect_stable(self)?.iter() {
-                let batch = keyed(batch, &mut *left_key);
+                let batch = keyed(batch, left_key);
                 join_helper(&batch, &right_recent, |k, l, r, w| {
                     result.push((mapper(k, l, r), w))
                 });
@@ -288,7 +288,7 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         }
         if !left_recent.is_empty() {
             for batch in join.right().collect_stable(self)?.iter() {
-                let batch = keyed(batch, &mut *right_key);
+                let batch = keyed(batch, right_key);
                 join_helper(&left_recent, &batch, |k, l, r, w| {
                     result.push((mapper(k, l, r), w))
                 });
@@ -349,7 +349,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         E: ExpressionExt<T>,
     {
         let stable = select.expression().collect_stable(self)?;
-        let mut predicate = select.predicate_mut();
+        let predicate = select.predicate();
         Ok(stable
             .iter()
             .map(|batch| {
@@ -451,7 +451,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         E: ExpressionExt<S>,
     {
         let stable = project.expression().collect_stable(self)?;
-        let mut mapper = project.mapper_mut();
+        let mapper = project.mapper();
         Ok(stable
             .iter()
             .map(|batch| {
@@ -475,7 +475,7 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
     {
         let left = product.left().collect_stable(self)?;
         let right = product.right().collect_stable(self)?;
-        let mut mapper = product.mapper_mut();
+        let mapper = product.mapper();
         let mut result = Vec::new();
         for left_batch in left.iter() {
             let mut tuples = Vec::new();
@@ -501,20 +501,18 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
         Left: ExpressionExt<L>,
         Right: ExpressionExt<R>,
     {
-        let mut left_key = join.left_key_mut();
-        let mut right_key = join.right_key_mut();
-        let mut mapper = join.mapper_mut();
+        let left_key = join.left_key();
+        let right_key = join.right_key();
+        let mapper = join.mapper();
 
         let left = join.left().collect_stable(self)?;
         let right = join.right().collect_stable(self)?;
-        let right: Vec<Vec<(K, &R, isize)>> = right
-            .iter()
-            .map(|batch| keyed(batch, &mut *right_key))
-            .collect();
+        let right: Vec<Vec<(K, &R, isize)>> =
+            right.iter().map(|batch| keyed(batch, right_key)).collect();
 
         let mut result = Vec::new();
         for left_batch in left.iter() {
-            let left_batch = keyed(left_batch, &mut *left_key);
+            let left_batch = keyed(left_batch, left_key);
             let mut tuples = Vec::new();
             for right_batch in right.iter() {
                 join_helper(&left_batch, right_batch, |k, l, r, w| {

@@ -1,10 +1,6 @@
 use super::{view::ViewRef, Expression, IntoExpression, Visitor};
 use crate::Tuple;
-use std::{
-    cell::{RefCell, RefMut},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{marker::PhantomData, rc::Rc};
 
 /// Projects the tuples of an inner sub-expression of type `S` to tuples of type `T`.
 ///
@@ -32,7 +28,7 @@ where
     E: Expression<S>,
 {
     expression: E,
-    mapper: Rc<RefCell<dyn FnMut(&S) -> T>>,
+    mapper: Rc<dyn Fn(&S) -> T>,
     relation_deps: Vec<String>,
     view_deps: Vec<ViewRef>,
 }
@@ -45,7 +41,7 @@ where
 {
     /// Creates a new [`Project`] expression over `expression` with a closure `mapper` that
     /// projects tuples of `expression` to the resulting tuples.
-    pub fn new<I>(expression: I, mapper: impl FnMut(&S) -> T + 'static) -> Self
+    pub fn new<I>(expression: I, mapper: impl Fn(&S) -> T + 'static) -> Self
     where
         I: IntoExpression<S, E>,
     {
@@ -58,7 +54,7 @@ where
 
         Self {
             expression,
-            mapper: Rc::new(RefCell::new(mapper)),
+            mapper: Rc::new(mapper),
             relation_deps: relation_deps.into_iter().collect(),
             view_deps: view_deps.into_iter().collect(),
         }
@@ -70,10 +66,10 @@ where
         &self.expression
     }
 
-    /// Returns a mutable reference (of type [`RefMut`]) to the projecting closure.
+    /// Returns the projecting closure.
     #[inline(always)]
-    pub(crate) fn mapper_mut(&self) -> RefMut<'_, dyn FnMut(&S) -> T> {
-        self.mapper.borrow_mut()
+    pub(crate) fn mapper(&self) -> &dyn Fn(&S) -> T {
+        &*self.mapper
     }
 
     /// Returns a reference to the relation dependencies of the receiver.

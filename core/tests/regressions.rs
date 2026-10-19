@@ -173,3 +173,27 @@ fn view_handles_identify_the_database_that_stored_them() {
         clone.evaluate(&all).unwrap().into_tuples()
     );
 }
+
+/// Expression closures are `Fn` and shared by clones; with only immutable captures a
+/// clone and its original evaluate the same stored view independently.
+#[test]
+fn clones_evaluate_shared_closures_independently() {
+    let threshold: u32 = 2;
+    let mut original = Database::new();
+    let r = original.add_relation::<Row>("r").unwrap();
+    let above: Mono<Row> =
+        Select::new(Mono::from(r.clone()), move |t: &Row| t[0] > threshold).into();
+    let view = original.store_view(above).unwrap();
+    original.insert(&r, vec![vec![1], vec![3]].into()).unwrap();
+
+    let clone = original.clone();
+    original.insert(&r, vec![vec![4]].into()).unwrap();
+    clone.insert(&r, vec![vec![5]].into()).unwrap();
+    clone.retract(&r, vec![vec![3]].into()).unwrap();
+
+    assert_eq!(
+        vec![vec![3], vec![4]],
+        original.evaluate(&view).unwrap().into_tuples()
+    );
+    assert_eq!(vec![vec![5]], clone.evaluate(&view).unwrap().into_tuples());
+}

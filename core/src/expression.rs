@@ -1,4 +1,8 @@
-/*! Defines relational algebraic expressions as generic types over [`Tuple`] types.*/
+/*! Defines relational algebraic expressions as generic types over [`Tuple`] types.
+
+The closures of [`Select`], [`Project`], [`Product`] and [`Join`] are `Fn`: an expression and
+its clones (including those held by clones of a [`Database`](crate::Database)) share them, so
+they must compute their result from their arguments and captured immutable data only.*/
 mod builder;
 pub(crate) mod dependency;
 mod difference;

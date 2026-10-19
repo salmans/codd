@@ -33,7 +33,7 @@ where
     ///
     /// assert_eq!(vec!["apple", "banana", "cherry"], db.evaluate(&lower).unwrap().into_tuples());
     /// ```
-    pub fn project<T>(self, f: impl FnMut(&L) -> T + 'static) -> Builder<T, Project<L, T, Left>>
+    pub fn project<T>(self, f: impl Fn(&L) -> T + 'static) -> Builder<T, Project<L, T, Left>>
     where
         T: Tuple,
     {
@@ -65,7 +65,7 @@ where
         }
     }
 
-    pub fn select(self, f: impl FnMut(&L) -> bool + 'static) -> Builder<L, Select<L, Left>> {
+    pub fn select(self, f: impl Fn(&L) -> bool + 'static) -> Builder<L, Select<L, Left>> {
         Builder {
             expression: Select::new(self.expression, f),
             _marker: PhantomData,
@@ -218,7 +218,7 @@ where
     ///     
     /// assert_eq!(vec!["Apple0", "Cherry4"], db.evaluate(&join).unwrap().into_tuples());
     /// ```
-    pub fn with_key<K>(self, f: impl FnMut(&L) -> K + 'static) -> WithKeyBuilder<K, L, Left>
+    pub fn with_key<K>(self, f: impl Fn(&L) -> K + 'static) -> WithKeyBuilder<K, L, Left>
     where
         K: Tuple,
     {
@@ -278,7 +278,7 @@ where
 {
     pub fn on<T: Tuple>(
         self,
-        f: impl FnMut(&L, &R) -> T + 'static,
+        f: impl Fn(&L, &R) -> T + 'static,
     ) -> Builder<T, Product<L, R, Left, Right, T>> {
         Builder {
             expression: Product::new(self.left, self.right, f),
@@ -294,7 +294,7 @@ where
     Left: Expression<L>,
 {
     expression: Left,
-    key: Box<dyn FnMut(&L) -> K>,
+    key: Box<dyn Fn(&L) -> K>,
 }
 
 impl<K, L, Left> WithKeyBuilder<K, L, Left>
@@ -340,7 +340,7 @@ where
 {
     pub fn on<T: Tuple>(
         self,
-        f: impl FnMut(&K, &L, &R) -> T + 'static,
+        f: impl Fn(&K, &L, &R) -> T + 'static,
     ) -> Builder<T, Join<K, L, R, Left, Right, T>> {
         Builder {
             expression: Join::new(
