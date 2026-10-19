@@ -24,7 +24,7 @@ live in `tests/regressions.rs`.
 | 12 | `Database::evaluate` deep-clones every stable batch and folds them pairwise, then copies again in `positives()`; a single k-way merge emitting the positive-weight tuples would do one pass. | code review | open; addressed by arrangements (plan A4) |
 | 13 | `collect_relation` and `collect_view` (`RecentCollector`) deep-clone the `recent` batch for every dependent view, although it is already an `Rc<Batch>`. | code review | open; addressed by arrangements (plan A4) |
 | 14 | Harness gaps: results are compared as sets, so derivation counts are unchecked; `Select` is equality-only; only `Mono<Vec<u32>>` shapes; small domains. | code review | open |
-| 15 | `Tuples` implements `DerefMut<Target = Vec<T>>`, so a caller can push unsorted or duplicate tuples and break the sorted, duplicate-free invariant; `Batch::from_set` therefore still sorts and dedups its input. Removing `DerefMut` (no known client mutates `Tuples`) would let it map directly through `from_sorted`. | code review | open; needs a public API change |
+| 15 | `Tuples` implements `DerefMut<Target = Vec<T>>`, so a caller can push unsorted or duplicate tuples and break the sorted, duplicate-free invariant; `Batch::from_set` therefore still sorts and dedups its input. Removing `DerefMut` (no known client mutates `Tuples`) would let it map directly through `from_sorted`. | code review | fixed: `DerefMut` removed, so `Tuples` is sorted and duplicate-free by construction and `from_set` maps through `from_sorted` |
 
 ## Harness coverage
 

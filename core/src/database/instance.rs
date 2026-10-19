@@ -50,12 +50,6 @@ impl<T: Tuple> Deref for Tuples<T> {
     }
 }
 
-impl<T: Tuple> core::ops::DerefMut for Tuples<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.items
-    }
-}
-
 /// Is a sorted, consolidated list of weighted tuples (a Z-set): every tuple appears at most
 /// once and no weight is zero. Batches are the unit of storage and of incremental change.
 #[derive(Clone, Debug, PartialEq)]
@@ -89,12 +83,7 @@ impl<T: Tuple> Batch<T> {
         if weight == 0 {
             return Self::empty();
         }
-        let mut items: Vec<T> = tuples.items.clone();
-        items.sort_unstable();
-        items.dedup();
-        Self {
-            items: items.into_iter().map(|t| (t, weight)).collect(),
-        }
+        Self::from_sorted(tuples.iter().map(|t| (t.clone(), weight)).collect())
     }
 
     /// Creates a batch from a sorted, consolidated list. The caller guarantees the invariant.
