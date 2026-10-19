@@ -16,7 +16,7 @@ live in `tests/regressions.rs`.
 | 4 | A failed `Any` downcast (relation or view handle with the wrong tuple type) was reported as `InstanceNotFound`. | code reading | fixed: new `Error::TypeMismatch` |
 | 5 | `diff_helper` rebound its loop variable instead of advancing the right-hand slices, so the gallop restarted from the beginning for every left tuple. Results were correct; cost was quadratic. | code reading | fixed |
 | 6 | `IncrementalCollector::collect_difference` is not a delta: it recomputes `stable(L) − stable(R)` and ignores growth on the right. It is only correct because views over `Difference` are rejected and `Evaluator` empties every `recent` before evaluating. | code reading | fixed: `Difference` is an antijoin with an exact delta on both sides and can be stored as a view |
-| 7 | Join, product, intersect and difference re-key and re-sort every stable batch of both children on every incremental step, so a delta step costs O(stable) rather than O(delta). `benches/incremental.rs`: one insert into a join view costs ~0.3 ms at 1k–10k stable tuples and ~1.2 ms at 100k. | code reading | open; addressed by arrangements (plan A4) |
+| 7 | Join, product, intersect and difference re-key and re-sort every stable batch of both children on every incremental step, so a delta step costs O(stable) rather than O(delta). `benches/incremental.rs` (insert one tuple into `r`, then evaluate the stored view `r ⋈ s` over two `n`-tuple relations; the view holds ~n²/1024 tuples): ~0.36 ms at n = 1k, ~1.4 ms at 10k, ~83 ms at 100k; at 100k the cost is dominated by copying the ~9.8M-tuple result out of the view (finding 12). | code reading | open; addressed by arrangements (plan A4) |
 | 8 | `Database::clone` shares the `Rc<RefCell<dyn FnMut>>` closures of expressions between clones. Stateless closures (the only kind `codd` has a reason to support) are unaffected. | code reading | fixed: closures are `Fn`, stored as `Rc<dyn Fn>` without `RefCell` |
 | 9 | First version of the weighted rewrite consolidated pending changes before applying set semantics, so `insert` of a present tuple followed by `retract` summed to no change and the tuple stayed. Pending changes are now folded in order against the running count of each tuple. | differential harness (shrunk to a 23-step program) | fixed before merge |
 
@@ -30,5 +30,5 @@ result sizes up to a few hundred rows. A 30 000-case `proptest` sweep passes.
 ## Clones
 
 Batches are immutable and reference counted, so `Database::clone` copies only the spine of each
-instance: ~0.5 µs regardless of size (1k, 10k and 100k tuples measured). A clone and its original
+instance: ~0.47 µs regardless of size (1k, 10k and 100k tuples measured). A clone and its original
 diverge independently, including by retraction; the differential harness exercises this.
