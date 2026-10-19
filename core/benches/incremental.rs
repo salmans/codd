@@ -18,7 +18,8 @@ fn setup(n: u32) -> (Database, codd::expression::Relation<Row>) {
     );
     let view = db.store_view(join).unwrap();
     db.insert(&r, (0..n).map(|i| (i % 1024, i)).into()).unwrap();
-    db.insert(&s, (0..n).map(|i| (i % 1024, i + n)).into()).unwrap();
+    db.insert(&s, (0..n).map(|i| (i % 1024, i + n)).into())
+        .unwrap();
     db.evaluate(&view).unwrap();
     (db, r)
 }
