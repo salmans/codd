@@ -17,10 +17,3 @@ either = "^1.6"
 
 [features]
 unstable = []
-[dev-dependencies]
-proptest = "1"
-criterion = "0.5"
-
-[[bench]]
-name = "incremental"
-harness = false

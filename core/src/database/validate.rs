@@ -1,10 +1,10 @@
 use crate::{
-    expression::{Expression, Full, Visitor},
+    expression::{Difference, Expression, Visitor},
     Error, Tuple,
 };
 
 /// Is a [`Visitor`] that validates if an expression can be turned into a [`View`].
-/// Expressions containing `Full` cannot be materialized and are rejected.
+/// Currently, expressions containing `Difference` are not supported.
 pub(crate) struct ViewExpressionValidator(Option<Error>);
 
 impl ViewExpressionValidator {
@@ -19,12 +19,14 @@ impl ViewExpressionValidator {
 }
 
 impl Visitor for ViewExpressionValidator {
-    fn visit_full<T>(&mut self, _: &Full<T>)
+    fn visit_difference<T, L, R>(&mut self, _: &Difference<T, L, R>)
     where
         T: Tuple,
+        L: Expression<T>,
+        R: Expression<T>,
     {
         self.0 = Some(Error::UnsupportedExpression {
-            name: "Full".to_string(),
+            name: "Difference".to_string(),
             operation: "Create View".to_string(),
         })
     }

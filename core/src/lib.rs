@@ -1,7 +1,5 @@
 /*! Implements a minimal [database][Database] and relational algebraic [expressions][expression] for evaluating queries in the database.
  */
-#![allow(clippy::type_complexity)] // expression types carry several closure parameters
-
 mod database;
 pub mod expression;
 
@@ -32,9 +30,4 @@ pub enum Error {
     /// Is returned when attempting to re-define an existing instance in a database.
     #[error("database instance `{name:?}` already exists")]
     InstanceExists { name: String },
-
-    /// Is returned when an instance exists but holds tuples of a different type than the
-    /// one requested.
-    #[error("database instance `{name:?}` has a different tuple type")]
-    TypeMismatch { name: String },
 }

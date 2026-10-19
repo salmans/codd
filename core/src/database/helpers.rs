@@ -1,9 +1,4 @@
-//! Low-level routines over sorted slices of weighted tuples.
-use super::instance::Batch;
-use crate::Tuple;
-use std::rc::Rc;
-
-/// Moves an ordered `slice` forward until `cmp` is false on its first element.
+/// Moves an ordered `slice` forward until `cmp` is true on the elements of `slice`.
 ///
 /// **Note**: `gallop` is directly borrowed from [`datafrog`].
 ///
@@ -30,56 +25,43 @@ pub(crate) fn gallop<T>(mut slice: &[T], mut cmp: impl FnMut(&T) -> bool) -> &[T
     slice
 }
 
-/// Adds the weight that `batch` assigns to each of the sorted `keys` to `counts`.
-pub(crate) fn add_counts<T: Tuple>(batch: &Batch<T>, keys: &[T], counts: &mut [isize]) {
-    let mut items = batch.items();
-    for (i, key) in keys.iter().enumerate() {
-        items = gallop(items, |x| x.0 < *key);
-        if let Some((t, w)) = items.first() {
-            if t == key {
-                counts[i] += *w;
-            }
-        }
-    }
-}
-
-/// Returns the total weight of each of the sorted `keys` over all `batches`.
-pub(crate) fn counts_in<T: Tuple>(batches: &[Rc<Batch<T>>], keys: &[T]) -> Vec<isize> {
-    let mut counts = vec![0; keys.len()];
-    for batch in batches {
-        add_counts(batch, keys, &mut counts);
-    }
-    counts
-}
-
-/// Applies `result` on every pair of `left` and `right` with the product of their weights.
+/// Applies `result` on elements of `slice`.
 #[inline(always)]
-pub(crate) fn product_helper<L, R>(
-    left: &[(L, isize)],
-    right: &[(R, isize)],
-    mut result: impl FnMut(&L, &R, isize),
-) {
-    for (l, wl) in left {
-        for (r, wr) in right {
-            result(l, r, wl * wr);
+pub(crate) fn project_helper<T>(slice: &[T], mut result: impl FnMut(&T)) {
+    let slice = &slice[..];
+    for tuple in slice {
+        result(tuple);
+    }
+}
+
+/// Applies `result` on every pair of `left` and `right` slices.
+#[inline(always)]
+pub(crate) fn product_helper<L, R>(left: &[L], right: &[R], mut result: impl FnMut(&L, &R)) {
+    let left = &left[..];
+    let right = &right[..];
+
+    for l in left {
+        for r in right {
+            result(&l, &r);
         }
     }
 }
 
-/// For two slices sorted by their first component, applies `result` on the pairs that agree
-/// on it, with the product of their weights.
+/// For two slices `left` and `right` that are sorted by the first element of their tuples,
+/// applies `result` on those pairs of `left` and `right` that agree on their first
+/// element as the key.
 ///
-/// **Note**: `join_helper` is adapted from [`datafrog`].
+/// **Note**: `join_helper` is directly borrowed from [`datafrog`].
 ///
 /// [`datafrog`]: https://github.com/rust-lang/datafrog
 #[inline(always)]
-pub(crate) fn join_helper<K: Ord, L, R>(
-    left: &[(K, L, isize)],
-    right: &[(K, R, isize)],
-    mut result: impl FnMut(&K, &L, &R, isize),
+pub(crate) fn join_helper<Key: Ord, L, R>(
+    left: &[(Key, L)],
+    right: &[(Key, R)],
+    mut result: impl FnMut(&Key, &L, &R),
 ) {
-    let mut slice1 = left;
-    let mut slice2 = right;
+    let mut slice1 = &left[..];
+    let mut slice2 = &right[..];
 
     while !slice1.is_empty() && !slice2.is_empty() {
         use std::cmp::Ordering;
@@ -90,9 +72,9 @@ pub(crate) fn join_helper<K: Ord, L, R>(
                 let count1 = slice1.iter().take_while(|x| x.0 == slice1[0].0).count();
                 let count2 = slice2.iter().take_while(|x| x.0 == slice2[0].0).count();
 
-                for item1 in slice1.iter().take(count1) {
-                    for item2 in slice2.iter().take(count2) {
-                        result(&item1.0, &item1.1, &item2.1, item1.2 * item2.2);
+                for index1 in 0..count1 {
+                    for item in slice2.iter().take(count2) {
+                        result(&slice1[0].0, &slice1[index1].1, &item.1);
                     }
                 }
 
@@ -104,55 +86,59 @@ pub(crate) fn join_helper<K: Ord, L, R>(
     }
 }
 
-/// For two sorted weighted slices, applies `result` on the common tuples with the product of
-/// their weights.
+/// For two sorted slices `left` and `right`, applies `result` on those elements of `left` and `right`
+/// that are equal.
 #[inline(always)]
-pub(crate) fn intersect_helper<T: Ord>(
-    left: &[(T, isize)],
-    right: &[(T, isize)],
-    mut result: impl FnMut(&T, isize),
-) {
-    let mut left = left;
-    let mut right = right;
+pub(crate) fn intersect_helper<T: Ord>(left: &[T], right: &[T], mut result: impl FnMut(&T)) {
+    let mut left = &left[..];
+    let mut right = &right[..];
 
     while !left.is_empty() && !right.is_empty() {
         use std::cmp::Ordering;
 
-        match left[0].0.cmp(&right[0].0) {
-            Ordering::Less => left = gallop(left, |x| x.0 < right[0].0),
+        match left[0].cmp(&right[0]) {
+            Ordering::Less => left = gallop(left, |x| x < &right[0]),
             Ordering::Equal => {
-                result(&left[0].0, left[0].1 * right[0].1);
+                result(&left[0]);
                 left = &left[1..];
                 right = &right[1..];
             }
-            Ordering::Greater => right = gallop(right, |x| x.0 < left[0].0),
+            Ordering::Greater => right = gallop(right, |x| x < &left[0]),
         }
     }
 }
 
-/// Merges two sorted lists of tuples into one sorted list without duplicates.
-pub(crate) fn merge_keys<T: Tuple>(left: &[T], right: &[T]) -> Vec<T> {
-    let mut result = Vec::with_capacity(left.len() + right.len());
-    let (mut i, mut j) = (0, 0);
-    while i < left.len() && j < right.len() {
-        use std::cmp::Ordering;
-        match left[i].cmp(&right[j]) {
-            Ordering::Less => {
-                result.push(left[i].clone());
-                i += 1;
-            }
-            Ordering::Greater => {
-                result.push(right[j].clone());
-                j += 1;
-            }
-            Ordering::Equal => {
-                result.push(left[i].clone());
-                i += 1;
-                j += 1;
+/// For two sorted slices `left` and `right`, applies `result` on those elements of `left` that appear
+/// in none of the slices of `right`.
+#[inline(always)]
+pub(crate) fn diff_helper<T: Ord>(left: &[T], right: &[&[T]], mut result: impl FnMut(&T)) {
+    let left = &left[..];
+    let mut right = right.iter().map(|sl| &sl[..]).collect::<Vec<&[T]>>();
+
+    for tuple in left {
+        let mut to_add = true;
+        for mut to_find in &mut right {
+            use std::cmp::Ordering;
+
+            if !to_find.is_empty() {
+                match tuple.cmp(&to_find[0]) {
+                    Ordering::Less => {}
+                    Ordering::Equal => {
+                        to_add = false;
+                    }
+                    Ordering::Greater => {
+                        let mut temp = gallop(to_find, |x| x < tuple);
+                        to_find = &mut temp;
+                        if !to_find.is_empty() && tuple == &to_find[0] {
+                            to_add = false;
+                        }
+                    }
+                }
             }
         }
+
+        if to_add {
+            result(tuple);
+        }
     }
-    result.extend(left[i..].iter().cloned());
-    result.extend(right[j..].iter().cloned());
-    result
 }

@@ -1,12 +1,7 @@
-/*! Defines relational algebraic expressions as generic types over [`Tuple`] types.
-
-The closures of [`Select`], [`Project`], [`Product`] and [`Join`] are `Fn`: an expression and
-its clones (including those held by clones of a [`Database`](crate::Database)) share them, so
-they must compute their result from their arguments and captured immutable data only.*/
+/*! Defines relational algebraic expressions as generic types over [`Tuple`] types.*/
 mod builder;
 pub(crate) mod dependency;
 mod difference;
-mod distinct;
 mod empty;
 mod full;
 mod intersect;
@@ -23,7 +18,6 @@ pub(crate) mod view;
 use crate::Tuple;
 pub use builder::Builder;
 pub use difference::Difference;
-pub use distinct::Distinct;
 pub use empty::Empty;
 pub use full::Full;
 pub use intersect::Intersect;
@@ -181,14 +175,6 @@ pub trait Visitor: Sized {
         walk_project(self, project);
     }
 
-    fn visit_distinct<T, E>(&mut self, distinct: &Distinct<T, E>)
-    where
-        T: Tuple,
-        E: Expression<T>,
-    {
-        walk_distinct(self, distinct);
-    }
-
     /// Visits a [`Product`] expression.    
     fn visit_product<L, R, Left, Right, T>(&mut self, product: &Product<L, R, Left, Right, T>)
     where
@@ -296,15 +282,6 @@ where
 {
     difference.left().visit(visitor);
     difference.right().visit(visitor);
-}
-
-fn walk_distinct<T, E, V>(visitor: &mut V, distinct: &Distinct<T, E>)
-where
-    T: Tuple,
-    E: Expression<T>,
-    V: Visitor,
-{
-    distinct.expression().visit(visitor);
 }
 
 fn walk_project<S, T, E, V>(visitor: &mut V, project: &Project<S, T, E>)

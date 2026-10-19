@@ -41,7 +41,7 @@ where
     where
         V: Visitor,
     {
-        visitor.visit_empty(self);
+        visitor.visit_empty(&self);
     }
 }
 

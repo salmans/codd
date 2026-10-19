@@ -1,11 +1,10 @@
 # codd
 
-[`codd`](https://en.wikipedia.org/wiki/Edgar_F._Codd) is a library for evaluating *typed* relational expressions in a minimal in-memory database with incrementally maintained views. `codd` is primarily developed to support an implementation of [`razor`](https://github.com/salmans/rusty-razor) based on relational algebra, however, its design is consistent with common concepts of database theory and may be used as a minimal general purpose database.
+[`codd`](https://en.wikipedia.org/wiki/Edgar_F._Codd) is a library for evaluating *typed* relational expressions in a monotonically growing minimal database in memory. `codd` is primarily developed to support an implementation of [`razor`](https://github.com/salmans/rusty-razor) based on relational algebra, however, its design is consistent with common concepts of database theory and may be used as a minimal general purpose database.
 
-Storage and incremental view maintenance follow [`datafrog`](https://github.com/rust-lang/datafrog) and [DBSP](https://github.com/feldera/feldera):
-* Every relation and view is an `Instance<T>` holding sorted, immutable batches of *weighted* tuples (a Z-set). Relations have set semantics (weights are kept at zero or one, so `insert` of a present tuple and `retract` of an absent one are no-ops); views keep the number of derivations of each tuple as its weight.
-* Changes arrive in `to_add`, are folded in order into one `recent` change, propagated to dependent views as weighted deltas, and then merged into the `stable` batches. Linear operators pass deltas through, bilinear operators (join, product, intersect) use `ΔL⋈R + L⋈ΔR + ΔL⋈ΔR`, and the non-linear ones (`Difference` as an antijoin, `Distinct`) recompute the affected tuples from the current counts of their operands.
-* Batches are shared between a database and its clones, so cloning is cheap and clones diverge independently, including by retraction.
+The implementation of database instances in `codd` is borrowed from [`datafrog`](https://github.com/rust-lang/datafrog):
+* `Instance<T>` (`Variable<T>` in `datafrog`) contains tuples of type `T`,
+* Incremental view maintenance is implemented by maintaining tuples of `Instance<T>` in three sets of `to_add` (candidate tuples to be inserted), `recent` (recently added tuples), and `stable` (old tuples that have been reflected in all views).
 
 In contrast, `codd` distinguishes relation instances from views and offers the trait `Expression<T>` and types that implement `Expression<T>` to query a database.
 

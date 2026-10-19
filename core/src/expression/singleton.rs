@@ -44,7 +44,7 @@ where
     where
         V: super::Visitor,
     {
-        visitor.visit_singleton(self)
+        visitor.visit_singleton(&self)
     }
 }
 

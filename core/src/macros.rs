@@ -7,7 +7,7 @@ macro_rules! query {
         $crate::relexp!(@select ($($rel_exp)*) $(@pred -> [$($pred)*])?)
     };
     ($db:ident, create relation $name:literal:<$schema:ty>) => {
-        $db.add_relation::<$schema>($name)
+        $db.add_relation::<$schema>($name);
     };
     ($db:ident, create view as
      (select [$proj:expr] from ($($rel_exp:tt)*) $(where [$($pred:tt)*])?)) => {
@@ -111,6 +111,7 @@ macro_rules! relexp {
 
 #[cfg(test)]
 mod tests {
+    use crate::{query, relexp};
     use crate::{Database, Tuples};
 
     macro_rules! create_relation {
