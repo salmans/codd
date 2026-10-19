@@ -243,18 +243,37 @@ pub(super) struct Instance<T: Tuple> {
     /// Pending changes.
     to_add: RefCell<Vec<Batch<T>>>,
 
-    /// Whether weights are clamped to the set semantics of a relation.
-    set_semantics: bool,
+    /// How the weight of a tuple accumulates.
+    weights: Weights,
+}
+
+/// Is how an [`Instance`] accumulates the weight of a tuple.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Weights {
+    /// Weights stay zero or one: the set semantics of a relation.
+    Set,
+    /// Weights count derivations, as in a view.
+    Counts,
+}
+
+impl Weights {
+    /// Returns the weight of a tuple of weight `old` after a change of `weight`.
+    fn apply(self, old: isize, weight: isize) -> isize {
+        match self {
+            Weights::Set => (old + weight > 0) as isize,
+            Weights::Counts => old + weight,
+        }
+    }
 }
 
 impl<T: Tuple> Instance<T> {
     /// Creates a new empty instance.
-    pub fn new(set_semantics: bool) -> Self {
+    pub fn new(weights: Weights) -> Self {
         Self {
             stable: RefCell::new(Vec::new()),
             recent: RefCell::new(Rc::new(Batch::empty())),
             to_add: RefCell::new(Vec::new()),
-            set_semantics,
+            weights,
         }
     }
 
@@ -295,7 +314,7 @@ impl<T: Tuple> Clone for Instance<T> {
             stable: RefCell::new(self.stable.borrow().clone()),
             recent: RefCell::new(self.recent.borrow().clone()),
             to_add: RefCell::new(self.to_add.borrow().clone()),
-            set_semantics: self.set_semantics,
+            weights: self.weights,
         }
     }
 }
@@ -305,7 +324,7 @@ impl<T: Tuple> PartialEq for Instance<T> {
         *self.stable.borrow() == *other.stable.borrow()
             && *self.recent.borrow() == *other.recent.borrow()
             && *self.to_add.borrow() == *other.to_add.borrow()
-            && self.set_semantics == other.set_semantics
+            && self.weights == other.weights
     }
 }
 
@@ -355,11 +374,7 @@ where
                 for (t, w) in batch.items() {
                     let i = keys.binary_search(t).unwrap();
                     let old = current[i];
-                    let new = if self.set_semantics {
-                        (old + w > 0) as isize
-                    } else {
-                        old + w
-                    };
+                    let new = self.weights.apply(old, *w);
                     delta[i] += new - old;
                     current[i] = new;
                 }
@@ -401,7 +416,7 @@ where
 {
     pub fn new(expression: E) -> Self {
         Self {
-            instance: Instance::new(false),
+            instance: Instance::new(Weights::Counts),
             expression,
         }
     }
@@ -490,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_relation_set_semantics() {
-        let instance = Instance::<i32>::new(true);
+        let instance = Instance::<i32>::new(Weights::Set);
         instance.insert(batch(vec![(1, 1), (2, 1)]));
         instance.insert(batch(vec![(2, 1), (3, 1)]));
         assert!(instance.changed());
@@ -519,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_view_keeps_derivation_counts() {
-        let instance = Instance::<i32>::new(false);
+        let instance = Instance::<i32>::new(Weights::Counts);
         instance.insert(batch(vec![(1, 2)]));
         assert!(instance.changed());
         instance.insert(batch(vec![(1, -1)]));
@@ -531,7 +546,7 @@ mod tests {
 
     #[test]
     fn test_clone_shares_nothing_mutable() {
-        let instance = Instance::<i32>::new(true);
+        let instance = Instance::<i32>::new(Weights::Set);
         instance.insert(batch(vec![(1, 1)]));
         instance.changed();
         let cloned = instance.clone();

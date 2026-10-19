@@ -21,7 +21,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use instance::{consolidate, Batch, DynInstance, Instance};
+use instance::{consolidate, Batch, DynInstance, Instance, Weights};
 
 /// Contains the information about an instance in the database.
 struct RelationEntry {
@@ -43,7 +43,7 @@ impl RelationEntry {
         T: Tuple + 'static,
     {
         Self {
-            instance: Box::new(Instance::<T>::new(true)),
+            instance: Box::new(Instance::<T>::new(Weights::Set)),
             dependent_views: HashSet::new(),
             stabilizing: Cell::new(false),
         }
