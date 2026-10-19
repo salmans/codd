@@ -157,6 +157,14 @@ impl<T: Tuple> Batch<T> {
         Self { items: result }
     }
 
+    /// Keys the batch for joining.
+    pub(crate) fn keyed<K: Tuple>(&self, key: impl Fn(&T) -> K) -> Keyed<'_, K, T> {
+        let mut items: Vec<(K, &T, isize)> =
+            self.items.iter().map(|(t, w)| (key(t), t, *w)).collect();
+        items.sort_by(|a, b| a.0.cmp(&b.0));
+        Keyed { items }
+    }
+
     /// Returns the tuples with a positive weight as a set.
     pub fn positives(&self) -> Tuples<T> {
         Tuples {
@@ -167,6 +175,19 @@ impl<T: Tuple> Batch<T> {
                 .map(|(t, _)| t.clone())
                 .collect(),
         }
+    }
+}
+
+/// Is a list of `(key, tuple, weight)` entries of a batch, sorted by key.
+pub(crate) struct Keyed<'a, K, T> {
+    items: Vec<(K, &'a T, isize)>,
+}
+
+impl<'a, K, T> Keyed<'a, K, T> {
+    /// Returns the keyed entries.
+    #[inline(always)]
+    pub(crate) fn items(&self) -> &[(K, &'a T, isize)] {
+        &self.items
     }
 }
 

@@ -1,5 +1,5 @@
 //! Low-level routines over sorted slices of weighted tuples.
-use super::instance::Batch;
+use super::instance::{Batch, Keyed};
 use crate::Tuple;
 use std::rc::Rc;
 
@@ -66,20 +66,20 @@ pub(crate) fn product_helper<L, R>(
     }
 }
 
-/// For two slices sorted by their first component, applies `result` on the pairs that agree
-/// on it, with the product of their weights.
+/// For two keyed batches, applies `result` on the pairs of tuples that agree on their key,
+/// with the product of their weights.
 ///
 /// **Note**: `join_helper` is adapted from [`datafrog`].
 ///
 /// [`datafrog`]: https://github.com/rust-lang/datafrog
 #[inline(always)]
 pub(crate) fn join_helper<K: Ord, L, R>(
-    left: &[(K, L, isize)],
-    right: &[(K, R, isize)],
+    left: &Keyed<'_, K, L>,
+    right: &Keyed<'_, K, R>,
     mut result: impl FnMut(&K, &L, &R, isize),
 ) {
-    let mut slice1 = left;
-    let mut slice2 = right;
+    let mut slice1 = left.items();
+    let mut slice2 = right.items();
 
     while !slice1.is_empty() && !slice2.is_empty() {
         use std::cmp::Ordering;
@@ -92,7 +92,7 @@ pub(crate) fn join_helper<K: Ord, L, R>(
 
                 for item1 in slice1.iter().take(count1) {
                     for item2 in slice2.iter().take(count2) {
-                        result(&item1.0, &item1.1, &item2.1, item1.2 * item2.2);
+                        result(&item1.0, item1.1, item2.1, item1.2 * item2.2);
                     }
                 }
 

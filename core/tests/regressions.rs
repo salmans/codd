@@ -1,4 +1,4 @@
-//! Regression tests for bugs found during the correctness review (see REVIEW.md).
+//! Regression tests for bugs found during the correctness review.
 
 use codd::{
     expression::{Full, Join, Mono, Relation, Select, Union},

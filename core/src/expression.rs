@@ -1,8 +1,10 @@
 /*! Defines relational algebraic expressions as generic types over [`Tuple`] types.
 
-The closures of [`Select`], [`Project`], [`Product`] and [`Join`] are `Fn`: an expression and
-its clones (including those held by clones of a [`Database`](crate::Database)) share them, so
-they must compute their result from their arguments and captured immutable data only.*/
+The closures given to [`Select`], [`Project`], [`Product`] and [`Join`] must be pure functions of
+their input. A tuple is mapped repeatedly: as part of a delta, against stable batches, and
+independently in clones of an expression (including those held by clones of a
+[`Database`](crate::Database)); a retraction cancels an earlier insertion only if the mapping is
+identical. That is why they are `Fn`.*/
 mod builder;
 pub(crate) mod dependency;
 mod difference;

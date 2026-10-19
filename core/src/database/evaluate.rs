@@ -9,7 +9,7 @@
 use super::{
     expression_ext::{ExpressionExt, RecentCollector, StableCollector},
     helpers::{counts_in, intersect_helper, join_helper, merge_keys, product_helper},
-    instance::{consolidate, Batch},
+    instance::{consolidate, Batch, Keyed},
     Database,
 };
 use crate::{expression::*, Error, Tuple};
@@ -35,17 +35,6 @@ fn unsupported(name: &str) -> Error {
         name: name.to_string(),
         operation: "Evaluate".to_string(),
     }
-}
-
-/// Keys a batch for joining: returns `(key, tuple, weight)` sorted by key.
-fn keyed<'a, K: Tuple, T: Tuple>(
-    batch: &'a Batch<T>,
-    key: &dyn Fn(&T) -> K,
-) -> Vec<(K, &'a T, isize)> {
-    let mut result: Vec<(K, &T, isize)> =
-        batch.items().iter().map(|(t, w)| (key(t), t, *w)).collect();
-    result.sort_by(|a, b| a.0.cmp(&b.0));
-    result
 }
 
 impl<'d> RecentCollector for IncrementalCollector<'d> {
@@ -119,14 +108,14 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         }
 
         let mut result = Vec::new();
-        if !right_recent.is_empty() {
+        if !right_recent.items().is_empty() {
             for batch in intersect.left().collect_stable(self)?.iter() {
                 intersect_helper(batch.items(), right_recent.items(), |t, w| {
                     result.push((t.clone(), w))
                 });
             }
         }
-        if !left_recent.is_empty() {
+        if !left_recent.items().is_empty() {
             for batch in intersect.right().collect_stable(self)?.iter() {
                 intersect_helper(left_recent.items(), batch.items(), |t, w| {
                     result.push((t.clone(), w))
@@ -232,14 +221,14 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
 
         let mapper = product.mapper();
         let mut result = Vec::new();
-        if !right_recent.is_empty() {
+        if !right_recent.items().is_empty() {
             for batch in product.left().collect_stable(self)?.iter() {
                 product_helper(batch.items(), right_recent.items(), |l, r, w| {
                     result.push((mapper(l, r), w))
                 });
             }
         }
-        if !left_recent.is_empty() {
+        if !left_recent.items().is_empty() {
             for batch in product.right().collect_stable(self)?.iter() {
                 product_helper(left_recent.items(), batch.items(), |l, r, w| {
                     result.push((mapper(l, r), w))
@@ -274,21 +263,21 @@ impl<'d> RecentCollector for IncrementalCollector<'d> {
         let right_key = join.right_key();
         let mapper = join.mapper();
 
-        let left_recent = keyed(&left_recent, left_key);
-        let right_recent = keyed(&right_recent, right_key);
+        let left_recent = left_recent.keyed(left_key);
+        let right_recent = right_recent.keyed(right_key);
 
         let mut result = Vec::new();
-        if !right_recent.is_empty() {
+        if !right_recent.items().is_empty() {
             for batch in join.left().collect_stable(self)?.iter() {
-                let batch = keyed(batch, left_key);
+                let batch = batch.keyed(left_key);
                 join_helper(&batch, &right_recent, |k, l, r, w| {
                     result.push((mapper(k, l, r), w))
                 });
             }
         }
-        if !left_recent.is_empty() {
+        if !left_recent.items().is_empty() {
             for batch in join.right().collect_stable(self)?.iter() {
-                let batch = keyed(batch, right_key);
+                let batch = batch.keyed(right_key);
                 join_helper(&left_recent, &batch, |k, l, r, w| {
                     result.push((mapper(k, l, r), w))
                 });
@@ -507,12 +496,11 @@ impl<'d> StableCollector for IncrementalCollector<'d> {
 
         let left = join.left().collect_stable(self)?;
         let right = join.right().collect_stable(self)?;
-        let right: Vec<Vec<(K, &R, isize)>> =
-            right.iter().map(|batch| keyed(batch, right_key)).collect();
+        let right: Vec<Keyed<K, R>> = right.iter().map(|batch| batch.keyed(right_key)).collect();
 
         let mut result = Vec::new();
         for left_batch in left.iter() {
-            let left_batch = keyed(left_batch, left_key);
+            let left_batch = left_batch.keyed(left_key);
             let mut tuples = Vec::new();
             for right_batch in right.iter() {
                 join_helper(&left_batch, right_batch, |k, l, r, w| {
